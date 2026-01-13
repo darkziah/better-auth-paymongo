@@ -70,6 +70,8 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@better-fetch/fetch": "^1.0.0"
+    "@better-fetch/fetch": "^1.0.0",
+    "@nanostores/react": "^1.0.0",
+    "nanostores": "^1.1.0"
   }
 }

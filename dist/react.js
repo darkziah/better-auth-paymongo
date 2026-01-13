@@ -1,86 +1,221 @@
-// src/react.ts
-import { useState, useEffect, useCallback } from "react";
-function createSubscriptionHooks(authClient) {
-  function useSubscription(options = {}) {
-    const { organizationId, fetchOnMount = true, pollingInterval = 0 } = options;
-    const [subscription, setSubscription] = useState(null);
-    const [isLoading, setIsLoading] = useState(fetchOnMount);
-    const [error, setError] = useState(null);
-    const refetch = useCallback(async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const result = await authClient.paymongo.getSubscription(organizationId ? { organizationId } : undefined);
-        if (result.error) {
-          setError(new Error(result.error.message));
-        } else {
-          setSubscription(result.data);
+// node_modules/nanostores/clean-stores/index.js
+var clean = Symbol("clean");
+
+// node_modules/nanostores/atom/index.js
+var listenerQueue = [];
+var lqIndex = 0;
+var QUEUE_ITEMS_PER_LISTENER = 4;
+var epoch = 0;
+var atom = (initialValue) => {
+  let listeners = [];
+  let $atom = {
+    get() {
+      if (!$atom.lc) {
+        $atom.listen(() => {})();
+      }
+      return $atom.value;
+    },
+    lc: 0,
+    listen(listener) {
+      $atom.lc = listeners.push(listener);
+      return () => {
+        for (let i = lqIndex + QUEUE_ITEMS_PER_LISTENER;i < listenerQueue.length; ) {
+          if (listenerQueue[i] === listener) {
+            listenerQueue.splice(i, QUEUE_ITEMS_PER_LISTENER);
+          } else {
+            i += QUEUE_ITEMS_PER_LISTENER;
+          }
         }
-      } catch (e) {
-        setError(e instanceof Error ? e : new Error("Failed to fetch subscription"));
-      } finally {
-        setIsLoading(false);
+        let index = listeners.indexOf(listener);
+        if (~index) {
+          listeners.splice(index, 1);
+          if (!--$atom.lc)
+            $atom.off();
+        }
+      };
+    },
+    notify(oldValue, changedKey) {
+      epoch++;
+      let runListenerQueue = !listenerQueue.length;
+      for (let listener of listeners) {
+        listenerQueue.push(listener, $atom.value, oldValue, changedKey);
       }
-    }, [organizationId]);
-    useEffect(() => {
-      if (fetchOnMount) {
-        refetch();
+      if (runListenerQueue) {
+        for (lqIndex = 0;lqIndex < listenerQueue.length; lqIndex += QUEUE_ITEMS_PER_LISTENER) {
+          listenerQueue[lqIndex](listenerQueue[lqIndex + 1], listenerQueue[lqIndex + 2], listenerQueue[lqIndex + 3]);
+        }
+        listenerQueue.length = 0;
       }
-    }, [fetchOnMount, refetch]);
-    useEffect(() => {
-      if (pollingInterval > 0) {
-        const interval = setInterval(refetch, pollingInterval);
-        return () => clearInterval(interval);
+    },
+    off() {},
+    set(newValue) {
+      let oldValue = $atom.value;
+      if (oldValue !== newValue) {
+        $atom.value = newValue;
+        $atom.notify(oldValue);
       }
-    }, [pollingInterval, refetch]);
-    const isActive = subscription?.status === "active";
-    const isTrialing = subscription?.status === "trialing";
-    return {
-      subscription,
-      planId: subscription?.planId ?? null,
-      isActive,
-      isTrialing,
-      isLoading,
-      error,
-      refetch
+    },
+    subscribe(listener) {
+      let unbind = $atom.listen(listener);
+      listener($atom.value);
+      return unbind;
+    },
+    value: initialValue
+  };
+  if (true) {
+    $atom[clean] = () => {
+      listeners = [];
+      $atom.lc = 0;
+      $atom.off();
     };
   }
-  function usePlan(options = {}) {
-    const { planId, isActive, isTrialing, isLoading, error, refetch } = useSubscription(options);
-    return { planId, isActive, isTrialing, isLoading, error, refetch };
-  }
-  function useIsSubscribed(options = {}) {
-    const { isActive, isTrialing, isLoading, error, refetch } = useSubscription(options);
-    return {
-      isSubscribed: isActive || isTrialing,
-      isActive,
-      isTrialing,
-      isLoading,
-      error,
-      refetch
-    };
-  }
-  function useUsage(limitKey, options = {}) {
-    const { subscription, isLoading, error, refetch } = useSubscription(options);
-    const plan = subscription?.planId;
-    const usage = subscription?.usage[limitKey] ?? 0;
-    return {
-      usage,
-      plan,
-      isLoading,
-      error,
-      refetch
-    };
-  }
+  return $atom;
+};
+// node_modules/nanostores/listen-keys/index.js
+function listenKeys($store, keys, listener) {
+  let keysSet = new Set(keys).add(undefined);
+  return $store.listen((value, oldValue, changed) => {
+    if (keysSet.has(changed)) {
+      listener(value, oldValue, changed);
+    }
+  });
+}
+// src/client.ts
+var subscriptionAtom = atom(null);
+var subscriptionLoadingAtom = atom(false);
+var subscriptionErrorAtom = atom(null);
+var paymongoClient = () => {
   return {
-    useSubscription,
-    usePlan,
-    useIsSubscribed,
-    useUsage
+    id: "paymongo",
+    $InferServerPlugin: {},
+    getAtoms: () => {
+      return {
+        $subscription: subscriptionAtom,
+        $subscriptionLoading: subscriptionLoadingAtom,
+        $subscriptionError: subscriptionErrorAtom
+      };
+    },
+    getActions: ($fetch) => ({
+      fetchSubscription: async (options) => {
+        subscriptionLoadingAtom.set(true);
+        subscriptionErrorAtom.set(null);
+        try {
+          const query = options?.organizationId ? `?organizationId=${options.organizationId}` : "";
+          const result = await $fetch(`/paymongo/get-subscription${query}`, {
+            method: "GET"
+          });
+          if (result.error) {
+            subscriptionErrorAtom.set(new Error(result.error.message));
+            return { data: null, error: result.error };
+          } else {
+            subscriptionAtom.set(result.data);
+            return { data: result.data, error: null };
+          }
+        } catch (e) {
+          const error = e instanceof Error ? e : new Error("Failed to fetch subscription");
+          subscriptionErrorAtom.set(error);
+          return { data: null, error: { message: error.message } };
+        } finally {
+          subscriptionLoadingAtom.set(false);
+        }
+      },
+      getPlan: async (options, fetchOptions) => {
+        const query = options?.organizationId ? `?organizationId=${options.organizationId}` : "";
+        const res = await $fetch(`/paymongo/get-subscription${query}`, {
+          method: "GET",
+          ...fetchOptions
+        });
+        return {
+          data: res.data?.planId ?? null,
+          error: res.error
+        };
+      },
+      getSubscription: async (options, fetchOptions) => {
+        const query = options?.organizationId ? `?organizationId=${options.organizationId}` : "";
+        return $fetch(`/paymongo/get-subscription${query}`, {
+          method: "GET",
+          ...fetchOptions
+        });
+      },
+      hasActiveSubscription: async (options, fetchOptions) => {
+        const query = options?.organizationId ? `?organizationId=${options.organizationId}` : "";
+        const res = await $fetch(`/paymongo/get-subscription${query}`, {
+          method: "GET",
+          ...fetchOptions
+        });
+        const isActive = res.data?.status === "active" || res.data?.status === "trialing";
+        return {
+          data: isActive,
+          error: res.error
+        };
+      }
+    })
+  };
+};
+
+// node_modules/@nanostores/react/index.js
+import { useCallback, useRef, useSyncExternalStore } from "react";
+var emit = (snapshotRef, onChange) => (value) => {
+  if (snapshotRef.current === value)
+    return;
+  snapshotRef.current = value;
+  onChange();
+};
+function useStore(store, { keys, deps = [store, keys] } = {}) {
+  let snapshotRef = useRef();
+  snapshotRef.current = store.get();
+  let subscribe = useCallback((onChange) => {
+    emit(snapshotRef, onChange)(store.value);
+    return keys?.length > 0 ? listenKeys(store, keys, emit(snapshotRef, onChange)) : store.listen(emit(snapshotRef, onChange));
+  }, deps);
+  let get = () => snapshotRef.current;
+  return useSyncExternalStore(subscribe, get, get);
+}
+
+// src/react.ts
+function useSubscription() {
+  const subscription = useStore(subscriptionAtom);
+  const isLoading = useStore(subscriptionLoadingAtom);
+  const error = useStore(subscriptionErrorAtom);
+  const isActive = subscription?.status === "active";
+  const isTrialing = subscription?.status === "trialing";
+  return {
+    subscription,
+    planId: subscription?.planId ?? null,
+    status: subscription?.status ?? null,
+    isActive,
+    isTrialing,
+    isSubscribed: isActive || isTrialing,
+    isLoading,
+    error
+  };
+}
+function usePlan() {
+  const { planId, isActive, isTrialing, isLoading, error } = useSubscription();
+  return { planId, isActive, isTrialing, isLoading, error };
+}
+function useIsSubscribed() {
+  const { isSubscribed, isActive, isTrialing, isLoading, error } = useSubscription();
+  return { isSubscribed, isActive, isTrialing, isLoading, error };
+}
+function useUsage(limitKey) {
+  const { subscription, isLoading, error } = useSubscription();
+  const usage = subscription?.usage?.[limitKey] ?? 0;
+  return {
+    usage,
+    planId: subscription?.planId ?? null,
+    isLoading,
+    error
   };
 }
 export {
-  createSubscriptionHooks
+  useUsage,
+  useSubscription,
+  usePlan,
+  useIsSubscribed,
+  subscriptionLoadingAtom,
+  subscriptionErrorAtom,
+  subscriptionAtom
 };
 
-//# debugId=2644A1D9D72E4E7264756E2164756E21
+//# debugId=4C3E71AFF724EC7064756E2164756E21
