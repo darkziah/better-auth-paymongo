@@ -19,6 +19,12 @@ When `incrementUsage({ limitKey: "seats", amount: 1 })` is called:
 - If current usage + 1 <= limit, update usage and return success.
 - If current usage + 1 > limit, throw an error.
 
+### Requirement: Decrementing Usage
+The server MUST allow decreasing usage for a specific limit key.
+
+#### Scenario: Decrementing usage
+When `decrementUsage({ limitKey: "seats", amount: 1 })` is called, the current usage is decreased by the specified amount, but never below zero.
+
 ### Requirement: Contextual Usage Check
 The server MUST check usage against the correct scope (User or Organization).
 

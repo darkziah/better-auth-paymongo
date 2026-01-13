@@ -1,16 +1,75 @@
 {
   "name": "better-auth-paymongo",
-  "module": "index.ts",
+  "version": "0.1.0",
+  "description": "PayMongo payment gateway plugin for Better-Auth with subscription management, add-ons, and usage-based billing",
   "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react.js",
+      "types": "./dist/react.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun run build:js && bun run build:types",
+    "build:js": "bun build src/index.ts src/client.ts src/react.ts --outdir dist --target node --format esm --sourcemap=external --external better-auth --external zod --external react --external @better-fetch/fetch",
+    "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "better-auth",
+    "paymongo",
+    "payments",
+    "subscriptions",
+    "authentication",
+    "billing",
+    "philippines",
+    "gcash",
+    "paymaya"
+  ],
+  "author": "darkziah",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/darkziah/better-auth-paymongo"
+  },
+  "homepage": "https://github.com/darkziah/better-auth-paymongo#readme",
+  "bugs": {
+    "url": "https://github.com/darkziah/better-auth-paymongo/issues"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "better-auth": ">=1.0.0",
+    "react": ">=18.0.0",
+    "zod": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19.2.8",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@better-auth/stripe": "^1.4.12",
-    "better-auth": "^1.4.12"
+    "@better-fetch/fetch": "^1.0.0"
   }
 }

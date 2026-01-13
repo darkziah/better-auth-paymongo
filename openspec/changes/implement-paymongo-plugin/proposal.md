@@ -17,3 +17,6 @@ Create a new plugin under `plugins/paymongo-plugin` that includes:
 -   **Dual Scope Support:** Unified logic for `user` and `organization` subscriptions.
 -   **No-Webhook Verification:** Status updates via direct API polling (`verifySubscription`).
 -   **Usage Limits:** Integrated logic for checking, incrementing, and enforcing usage limits.
+-   **Plan Switching:** Simple upgrade/downgrade logic with immediate effect.
+-   **Trial Periods:** Support for trial periods defined in plan configurations, delaying billing start.
+-   **Lifecycle Hooks:** Callbacks for creation, activation, update, and cancellation events.
