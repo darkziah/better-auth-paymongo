@@ -1,0 +1,16 @@
+{
+  "name": "better-auth-paymongo",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@better-auth/stripe": "^1.4.12",
+    "better-auth": "^1.4.12"
+  }
+}
