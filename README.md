@@ -6,7 +6,7 @@ Built on the [Autumn billing pattern](https://useautumn.com) - your billing stat
 
 ## Features
 
-- **No Webhooks** - Verify payments on-demand with intelligent caching
+- **No Webhooks** - Verify payments on-demand
 - **Feature-Based Access** - Define features, not just plans
 - **Usage Metering** - Track and limit API calls, storage, etc.
 - **User & Organization Billing** - Support both scopes
@@ -107,7 +107,7 @@ export const authClient = createAuthClient({
 
 ### 3. Run Database Migrations
 
-The plugin automatically creates a `paymongoUsage` table. Run your Better-Auth migrations:
+The plugin automatically creates `paymongoSession` and `paymongoUsage` tables. Run your Better-Auth migrations:
 
 ```bash
 npx better-auth migrate
@@ -127,7 +127,7 @@ Create a checkout session for a plan purchase.
 ```json
 {
   "planId": "pro",
-  "successUrl": "https://yourapp.com/billing/success",
+  "successUrl": "https://yourapp.com/billing/success?ref=xxx",
   "cancelUrl": "https://yourapp.com/billing/cancel",
   "organizationId": "org_123"
 }
@@ -138,6 +138,25 @@ Create a checkout session for a plan purchase.
 {
   "checkoutUrl": "https://checkout.paymongo.com/cs_...",
   "sessionId": "cs_..."
+}
+```
+
+#### `POST /api/auth/paymongo/verify`
+
+Verify payment completion after PayMongo redirect.
+
+**Request:**
+```json
+{
+  "ref": "ref_1234567890_abc123def"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "planId": "pro"
 }
 ```
 
@@ -208,7 +227,7 @@ import { authClient } from "./auth-client";
 
 // Subscribe to a plan
 const { data, error } = await authClient.paymongo.attach("pro", {
-  successUrl: window.location.origin + "/billing/success",
+  successUrl: window.location.origin + "/billing/success?ref=xxx",
   cancelUrl: window.location.origin + "/billing/cancel",
 });
 
@@ -234,7 +253,7 @@ console.log(`API calls remaining: ${track?.balance}`);
 ```typescript
 // Attach plan to an organization
 await authClient.paymongo.attach("enterprise", {
-  successUrl: "/success",
+  successUrl: "/success?ref=xxx",
   cancelUrl: "/cancel",
   organizationId: "org_123",
 });
@@ -431,7 +450,7 @@ This plugin follows the [Autumn billing pattern](https://useautumn.com):
 
 1. **No local subscription state** - PayMongo is the source of truth
 2. **Three simple endpoints** - `attach`, `check`, `track`
-3. **No webhooks** - Poll payment status on-demand with 60s caching
+3. **No webhooks** - Verify payment on redirect via `/verify` endpoint
 4. **Lazy period rollover** - Reset usage when checking, not via cron
 
 ### Payment Flow
@@ -444,10 +463,10 @@ This plugin follows the [Autumn billing pattern](https://useautumn.com):
                                                │
                     ┌──────────────────────────┘
                     ▼
-┌─────────────┐     ┌─────────────┐
-│  Success    │────▶│  /check     │──── Payment verified ✓
-│  Redirect   │     │  endpoint   │     (cached 60s)
-└─────────────┘     └─────────────┘
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Redirect   │────▶│  /verify    │────▶│  /check     │
+│  ?ref=xxx   │     │  endpoint   │     │  endpoint   │
+└─────────────┘     └─────────────┘     └─────────────┘
 ```
 
 ### Usage Tracking Flow
@@ -502,7 +521,20 @@ This plugin follows the [Autumn billing pattern](https://useautumn.com):
 
 ## Database Schema
 
-The plugin creates a `paymongoUsage` table:
+### `paymongoSession` Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `string` | Primary key |
+| `sessionId` | `string` | PayMongo checkout session ID |
+| `referenceId` | `string` | Unique reference for redirect tracking |
+| `entityType` | `string` | `"user"` or `"organization"` |
+| `entityId` | `string` | User or organization ID |
+| `planId` | `string` | Plan being purchased |
+| `status` | `string` | `"pending"` or `"completed"` |
+| `createdAt` | `date` | Created timestamp |
+
+### `paymongoUsage` Table
 
 | Column | Type | Description |
 |--------|------|-------------|
@@ -562,7 +594,7 @@ import { authClient } from "@/lib/auth-client";
 function PricingPage() {
   const handleSubscribe = async (planId: string) => {
     const { data, error } = await authClient.paymongo.attach(planId, {
-      successUrl: `${window.location.origin}/billing/success`,
+      successUrl: `${window.location.origin}/billing/success?ref=xxx`,
       cancelUrl: `${window.location.origin}/pricing`,
     });
 

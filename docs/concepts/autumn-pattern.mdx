@@ -21,10 +21,13 @@ Named after the [Autumn billing service](https://useautumn.com) that pioneered t
     User completes payment on PayMongo's hosted checkout
   </Step>
   <Step title="Redirect">
-    User returns to your success URL
+    User returns to your success URL with `?ref=xxx` parameter
+  </Step>
+  <Step title="Verify">
+    Call `/verify` endpoint to confirm payment and create usage records
   </Step>
   <Step title="Check">
-    On feature access, verify payment status via PayMongo API
+    On feature access, check usage records in database
   </Step>
   <Step title="Track">
     Decrement usage for metered features
@@ -37,7 +40,7 @@ Named after the [Autumn billing service](https://useautumn.com) that pioneered t
 sequenceDiagram
     participant User
     participant App as Your App
-    participant DB as paymongoUsage
+    participant DB as Database
     participant PM as PayMongo
 
     User->>App: Click "Subscribe"
@@ -47,14 +50,14 @@ sequenceDiagram
     App-->>User: Redirect to PayMongo
 
     User->>PM: Complete payment
-    PM-->>User: Redirect to successUrl
+    PM-->>User: Redirect to successUrl?ref=xxx
 
-    User->>App: Access feature
-    App->>App: GET /check
-    App->>PM: Verify session status
-    PM-->>App: paid: true
-    App->>DB: Update status, set limits
-    App-->>User: Access granted ✓
+    User->>App: Return with ref param
+    App->>App: POST /verify
+    App->>PM: GET /checkout_sessions/{id}
+    PM-->>App: payment_status: paid
+    App->>DB: Create usage records
+    App-->>User: Subscription active ✓
 
     User->>App: Use metered feature
     App->>App: POST /track
@@ -71,11 +74,11 @@ sequenceDiagram
   <Card title="Always Accurate" icon="check-circle">
     Payment status is checked at access time, not when a webhook arrives.
   </Card>
-  <Card title="Graceful Degradation" icon="shield">
-    If PayMongo is temporarily down, cached status is used.
+  <Card title="Verify on Return" icon="check-circle">
+    Payment is verified when user returns via `/verify` endpoint. No polling needed.
   </Card>
-  <Card title="60-Second Cache" icon="clock">
-    Reduces API calls while staying current. Balance between freshness and performance.
+  <Card title="Database-Backed" icon="database">
+    All billing state stored in your database. No external state to sync.
   </Card>
 </CardGroup>
 

@@ -5,7 +5,7 @@ description: API reference for the paymongo() server plugin
 
 # Server Plugin
 
-The `paymongo()` plugin registers three HTTP endpoints under `/api/auth/paymongo/`.
+The `paymongo()` plugin registers four HTTP endpoints under `/api/auth/paymongo/`.
 
 ## Endpoints
 
@@ -56,9 +56,40 @@ curl -X POST /api/auth/paymongo/attach \
 
 ---
 
+### POST /api/auth/paymongo/verify
+
+Verifies payment completion after PayMongo redirect. Call this when the user returns with a `ref` query parameter.
+
+<ParamField body="ref" type="string" required>
+  The reference ID from the redirect URL query parameter
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether verification succeeded
+</ResponseField>
+
+<ResponseField name="planId" type="string">
+  The plan that was purchased
+</ResponseField>
+
+```bash Example Request
+curl -X POST /api/auth/paymongo/verify \
+  -H "Content-Type: application/json" \
+  -d '{"ref": "ref_1706547890_abc123def"}'
+```
+
+```json Response
+{
+  "success": true,
+  "planId": "pro"
+}
+```
+
+---
+
 ### GET /api/auth/paymongo/check
 
-Checks if a feature is accessible. Verifies payment status (cached 60s) and handles period rollover.
+Checks if a feature is accessible. Verifies payment status and handles period rollover.
 
 <ParamField query="feature" type="string" required>
   The feature ID to check

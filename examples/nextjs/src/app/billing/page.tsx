@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import type { CheckResponse } from "better-auth-paymongo";
 
-function UsageMeter({ featureId, label }: { featureId: string; label: string }) {
+function UsageMeter({ featureId, label, refreshKey }: { featureId: string; label: string; refreshKey: number }) {
   const [usage, setUsage] = useState<CheckResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [consuming, setConsuming] = useState(false);
 
-  const fetchUsage = () => {
+  const fetchUsage = useCallback(() => {
+    setLoading(true);
     authClient.paymongo
       .check({ query: { feature: featureId } })
       .then(({ data }) => {
@@ -18,11 +19,11 @@ function UsageMeter({ featureId, label }: { featureId: string; label: string }) 
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  };
+  }, [featureId]);
 
   useEffect(() => {
     fetchUsage();
-  }, [featureId]);
+  }, [featureId, refreshKey, fetchUsage]);
 
   const consumeResource = async (amount: number) => {
     setConsuming(true);
@@ -102,15 +103,17 @@ function UsageMeter({ featureId, label }: { featureId: string; label: string }) 
   );
 }
 
-function CurrentPlan() {
+function CurrentPlan({ refreshKey }: { refreshKey: number }) {
   const [planId, setPlanId] = useState<string | null>(null);
 
   useEffect(() => {
     authClient.paymongo
       .check({ query: { feature: "projects" } })
-      .then(({ data }) => setPlanId(data?.planId || null))
+      .then(({ data }) => {
+        setPlanId(data?.planId || null);
+      })
       .catch(console.error);
-  }, []);
+  }, [refreshKey]);
 
   const planNames: Record<string, string> = {
     free: "Free",
@@ -134,7 +137,7 @@ function CurrentPlan() {
   );
 }
 
-function FeatureAccess({ featureId, label }: { featureId: string; label: string }) {
+function FeatureAccess({ featureId, label, refreshKey }: { featureId: string; label: string; refreshKey: number }) {
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -142,7 +145,7 @@ function FeatureAccess({ featureId, label }: { featureId: string; label: string 
       .check({ query: { feature: featureId } })
       .then(({ data }) => setAllowed(data?.allowed ?? null))
       .catch(console.error);
-  }, [featureId]);
+  }, [featureId, refreshKey]);
 
   return (
     <div className="flex items-center justify-between py-3 border-b border-zinc-200 dark:border-zinc-700 last:border-0">
@@ -162,24 +165,25 @@ function FeatureAccess({ featureId, label }: { featureId: string; label: string 
 
 export default function BillingPage() {
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get("session_id");
-  const [verifying, setVerifying] = useState(!!sessionId);
+  const ref = searchParams.get("ref");
+  const [verifying, setVerifying] = useState(!!ref);
   const [verified, setVerified] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (sessionId && !verified) {
+    if (ref && !verified) {
       authClient.paymongo
-        .verify({ sessionId })
+        .verify({ ref })
         .then(({ data, error }) => {
           if (error) throw error;
           setVerified(true);
           window.history.replaceState({}, "", "/billing");
-          window.location.reload();
+          setRefreshKey((k) => k + 1);
         })
         .catch(console.error)
         .finally(() => setVerifying(false));
     }
-  }, [sessionId, verified]);
+  }, [ref, verified]);
 
   if (verifying) {
     return (
@@ -196,20 +200,20 @@ export default function BillingPage() {
 
       <div className="grid md:grid-cols-2 gap-8">
         <div>
-          <CurrentPlan />
+          <CurrentPlan refreshKey={refreshKey} />
         </div>
 
         <div className="bg-white dark:bg-zinc-800 rounded-lg p-6 border border-zinc-200 dark:border-zinc-700">
           <h2 className="text-xl font-bold mb-4">Feature Access</h2>
-          <FeatureAccess featureId="priority_support" label="Priority Support" />
+          <FeatureAccess featureId="priority_support" label="Priority Support" refreshKey={refreshKey} />
         </div>
       </div>
 
       <h2 className="text-2xl font-bold mt-12 mb-6">Usage</h2>
       <div className="grid md:grid-cols-3 gap-6">
-        <UsageMeter featureId="projects" label="Projects" />
-        <UsageMeter featureId="storage" label="Storage (MB)" />
-        <UsageMeter featureId="api_calls" label="API Calls" />
+        <UsageMeter featureId="projects" label="Projects" refreshKey={refreshKey} />
+        <UsageMeter featureId="storage" label="Storage (MB)" refreshKey={refreshKey} />
+        <UsageMeter featureId="api_calls" label="API Calls" refreshKey={refreshKey} />
       </div>
     </div>
   );

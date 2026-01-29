@@ -7,9 +7,6 @@ export { paymongoClient } from './client';
 // React hooks
 export { useCheck, useSubscription, refreshBilling, $refreshTrigger } from './react';
 
-// Cache
-export { cache } from './cache';
-
 // Organization
 export { createPaymongoOrganization, createSeatLimit, getOrganizationSeats } from './organization';
 

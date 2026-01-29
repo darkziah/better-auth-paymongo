@@ -849,32 +849,7 @@ var require_react = __commonJS((exports, module) => {
 
 // src/server.ts
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-
-// src/cache.ts
-var store = new Map;
-var cache = {
-  get(key) {
-    const entry = store.get(key);
-    if (!entry)
-      return null;
-    if (Date.now() > entry.expiresAt) {
-      store.delete(key);
-      return null;
-    }
-    return entry.value;
-  },
-  set(key, value, ttlSeconds = 60) {
-    store.set(key, {
-      value,
-      expiresAt: Date.now() + ttlSeconds * 1000
-    });
-  },
-  delete(key) {
-    store.delete(key);
-  }
-};
-
-// src/server.ts
+import { z } from "zod";
 var paymongo = (config) => {
   const paymongoFetch = async (path, options) => {
     const auth = Buffer.from(config.secretKey + ":").toString("base64");
@@ -937,22 +912,62 @@ var paymongo = (config) => {
             required: true
           }
         }
+      },
+      paymongoSession: {
+        fields: {
+          sessionId: {
+            type: "string",
+            required: true
+          },
+          referenceId: {
+            type: "string",
+            required: true
+          },
+          entityType: {
+            type: "string",
+            required: true
+          },
+          entityId: {
+            type: "string",
+            required: true
+          },
+          planId: {
+            type: "string",
+            required: true
+          },
+          status: {
+            type: "string",
+            required: true
+          },
+          createdAt: {
+            type: "date",
+            required: true
+          }
+        }
       }
     },
     endpoints: {
       attach: createAuthEndpoint("/paymongo/attach", {
         method: "POST",
-        use: [sessionMiddleware]
+        use: [sessionMiddleware],
+        body: z.object({
+          planId: z.string(),
+          successUrl: z.string(),
+          cancelUrl: z.string(),
+          organizationId: z.string().optional()
+        })
       }, async (ctx) => {
         const user = ctx.context.session.user;
-        const body = ctx.body;
-        const { planId, successUrl, cancelUrl, organizationId } = body;
+        const { planId, successUrl, cancelUrl, organizationId } = ctx.body;
         const plan = config.plans[planId];
         if (!plan) {
           throw new Error(`Plan ${planId} not found`);
         }
         const entityType = organizationId ? "organization" : "user";
         const entityId = organizationId || user.id;
+        const referenceId = `ref_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        const successUrlWithRef = new URL(successUrl);
+        successUrlWithRef.searchParams.set("ref", referenceId);
         const checkoutResponse = await paymongoFetch("/checkout_sessions", {
           method: "POST",
           body: JSON.stringify({
@@ -967,8 +982,9 @@ var paymongo = (config) => {
                   }
                 ],
                 payment_method_types: ["card", "gcash", "grab_pay"],
-                success_url: successUrl,
+                success_url: successUrlWithRef.toString(),
                 cancel_url: cancelUrl,
+                reference_number: referenceId,
                 billing: {
                   email: user.email
                 }
@@ -983,6 +999,55 @@ var paymongo = (config) => {
         const checkoutData = await checkoutResponse.json();
         const sessionId = checkoutData.data.id;
         const checkoutUrl = checkoutData.data.attributes.checkout_url;
+        await ctx.context.adapter.create({
+          model: "paymongoSession",
+          data: {
+            sessionId,
+            referenceId,
+            entityType,
+            entityId,
+            planId,
+            status: "pending",
+            createdAt: new Date
+          }
+        });
+        return ctx.json({
+          checkoutUrl,
+          sessionId
+        });
+      }),
+      setplan: createAuthEndpoint("/paymongo/set-plan", {
+        method: "POST",
+        use: [sessionMiddleware],
+        body: z.object({
+          planId: z.string(),
+          organizationId: z.string().optional()
+        })
+      }, async (ctx) => {
+        const user = ctx.context.session.user;
+        const { planId, organizationId } = ctx.body;
+        const plan = config.plans[planId];
+        if (!plan) {
+          throw new Error(`Plan ${planId} not found`);
+        }
+        const entityType = organizationId ? "organization" : "user";
+        const entityId = organizationId || user.id;
+        const existingRecords = await ctx.context.adapter.findMany({
+          model: "paymongoUsage",
+          where: [
+            { field: "entityType", value: entityType },
+            { field: "entityId", value: entityId }
+          ]
+        });
+        const usageByFeature = new Map;
+        for (const record of existingRecords) {
+          const consumed = record.limit - record.balance;
+          usageByFeature.set(record.featureId, { consumed });
+          await ctx.context.adapter.delete({
+            model: "paymongoUsage",
+            where: [{ field: "id", value: record.id }]
+          });
+        }
         const now = new Date;
         const periodEnd = new Date(now);
         periodEnd.setMonth(periodEnd.getMonth() + (plan.interval === "yearly" ? 12 : 1));
@@ -990,40 +1055,128 @@ var paymongo = (config) => {
         for (const [featureId, featureValue] of Object.entries(planFeatures)) {
           const featureConfig = config.features[featureId];
           if (featureConfig && featureConfig.type === "metered") {
-            const limit = typeof featureValue === "number" ? featureValue : featureConfig.limit;
+            const newLimit = typeof featureValue === "number" ? featureValue : featureConfig.limit;
+            const previousUsage = usageByFeature.get(featureId);
+            const consumed = previousUsage?.consumed ?? 0;
+            const newBalance = Math.max(0, newLimit - consumed);
             await ctx.context.adapter.create({
               model: "paymongoUsage",
               data: {
                 entityType,
                 entityId,
                 featureId,
-                balance: limit,
-                limit,
+                balance: newBalance,
+                limit: newLimit,
                 periodStart: now,
                 periodEnd,
                 planId,
-                checkoutSessionId: sessionId,
+                checkoutSessionId: null,
                 createdAt: now,
                 updatedAt: now
               }
             });
           }
         }
-        return ctx.json({
-          checkoutUrl,
-          sessionId
+        return ctx.json({ success: true, planId });
+      }),
+      verify: createAuthEndpoint("/paymongo/verify", {
+        method: "POST",
+        use: [sessionMiddleware],
+        body: z.object({
+          ref: z.string()
+        })
+      }, async (ctx) => {
+        const { ref } = ctx.body;
+        const pendingSession = await ctx.context.adapter.findOne({
+          model: "paymongoSession",
+          where: [{ field: "referenceId", value: ref }]
         });
+        if (!pendingSession) {
+          throw new Error(`Session not found for ref: ${ref}`);
+        }
+        if (pendingSession.status === "completed") {
+          return ctx.json({ success: true, planId: pendingSession.planId });
+        }
+        const sessionResponse = await paymongoFetch(`/checkout_sessions/${pendingSession.sessionId}`, {
+          method: "GET"
+        });
+        if (!sessionResponse.ok) {
+          const error = await sessionResponse.text();
+          throw new Error(`PayMongo API error: ${error}`);
+        }
+        const sessionData = await sessionResponse.json();
+        const paymentStatus = sessionData.data?.attributes?.payment_status || sessionData.data?.attributes?.payments?.[0]?.attributes?.status;
+        if (paymentStatus !== "paid") {
+          throw new Error(`Payment not completed. Status: ${paymentStatus}`);
+        }
+        const plan = config.plans[pendingSession.planId];
+        if (!plan) {
+          throw new Error(`Plan ${pendingSession.planId} not found`);
+        }
+        const existingRecords = await ctx.context.adapter.findMany({
+          model: "paymongoUsage",
+          where: [
+            { field: "entityType", value: pendingSession.entityType },
+            { field: "entityId", value: pendingSession.entityId }
+          ]
+        });
+        const usageByFeature = new Map;
+        for (const record of existingRecords) {
+          const consumed = record.limit - record.balance;
+          usageByFeature.set(record.featureId, { consumed });
+          await ctx.context.adapter.delete({
+            model: "paymongoUsage",
+            where: [{ field: "id", value: record.id }]
+          });
+        }
+        const now = new Date;
+        const periodEnd = new Date(now);
+        periodEnd.setMonth(periodEnd.getMonth() + (plan.interval === "yearly" ? 12 : 1));
+        const planFeatures = plan.features;
+        for (const [featureId, featureValue] of Object.entries(planFeatures)) {
+          const featureConfig = config.features[featureId];
+          if (featureConfig && featureConfig.type === "metered") {
+            const newLimit = typeof featureValue === "number" ? featureValue : featureConfig.limit;
+            const previousUsage = usageByFeature.get(featureId);
+            const consumed = previousUsage?.consumed ?? 0;
+            const newBalance = Math.max(0, newLimit - consumed);
+            console.log("[VERIFY] Creating usage record:", { featureId, newLimit, consumed, newBalance, planId: pendingSession.planId });
+            await ctx.context.adapter.create({
+              model: "paymongoUsage",
+              data: {
+                entityType: pendingSession.entityType,
+                entityId: pendingSession.entityId,
+                featureId,
+                balance: newBalance,
+                limit: newLimit,
+                periodStart: now,
+                periodEnd,
+                planId: pendingSession.planId,
+                checkoutSessionId: pendingSession.sessionId,
+                createdAt: now,
+                updatedAt: now
+              }
+            });
+          }
+        }
+        console.log("[VERIFY] Marking session completed, returning planId:", pendingSession.planId);
+        await ctx.context.adapter.update({
+          model: "paymongoSession",
+          where: [{ field: "referenceId", value: ref }],
+          update: { status: "completed" }
+        });
+        return ctx.json({ success: true, planId: pendingSession.planId });
       }),
       check: createAuthEndpoint("/paymongo/check", {
         method: "GET",
-        use: [sessionMiddleware]
+        use: [sessionMiddleware],
+        query: z.object({
+          feature: z.string(),
+          organizationId: z.string().optional()
+        })
       }, async (ctx) => {
         const user = ctx.context.session.user;
-        const query = ctx.query;
-        const { feature: featureId, organizationId } = query;
-        if (!featureId) {
-          throw new Error("Missing required query param: feature");
-        }
+        const { feature: featureId, organizationId } = ctx.query;
         const entityType = organizationId ? "organization" : "user";
         const entityId = organizationId || user.id;
         const usageRecord = await ctx.context.adapter.findOne({
@@ -1037,24 +1190,6 @@ var paymongo = (config) => {
         if (!usageRecord) {
           return ctx.json({
             allowed: false
-          });
-        }
-        const cacheKey = `paymongo:${entityType}:${entityId}:session`;
-        let sessionStatus = cache.get(cacheKey);
-        if (!sessionStatus && usageRecord.checkoutSessionId) {
-          const response = await paymongoFetch(`/checkout_sessions/${usageRecord.checkoutSessionId}`, {
-            method: "GET"
-          });
-          if (response.ok) {
-            const data = await response.json();
-            sessionStatus = data.data.attributes.payment_intent?.attributes?.status || "pending";
-            cache.set(cacheKey, sessionStatus, 60);
-          }
-        }
-        if (sessionStatus && sessionStatus !== "succeeded") {
-          return ctx.json({
-            allowed: false,
-            planId: usageRecord.planId
           });
         }
         const featureConfig = config.features[featureId];
@@ -1092,10 +1227,15 @@ var paymongo = (config) => {
       }),
       track: createAuthEndpoint("/paymongo/track", {
         method: "POST",
-        use: [sessionMiddleware]
+        use: [sessionMiddleware],
+        body: z.object({
+          feature: z.string(),
+          delta: z.number().optional().default(1),
+          organizationId: z.string().optional()
+        })
       }, async (ctx) => {
         const user = ctx.context.session.user;
-        const { feature, delta = 1, organizationId } = ctx.body;
+        const { feature, delta, organizationId } = ctx.body;
         const entityType = organizationId ? "organization" : "user";
         const entityId = organizationId || user.id;
         const usageRecord = await ctx.context.adapter.findOne({
@@ -1208,39 +1348,15 @@ var paymongoClient = () => {
   return {
     id: "paymongo",
     $InferServerPlugin: {},
-    getAtoms: ($fetch) => ({
+    getAtoms: () => ({
       $subscriptionSignal
     }),
-    getActions: ($fetch) => ({
-      attach: async (planId, options) => {
-        const result = await $fetch("/paymongo/attach", {
-          method: "POST",
-          body: { planId, ...options }
-        });
-        if (result.data) {
-          $subscriptionSignal.set(!$subscriptionSignal.get());
-        }
-        return result;
-      },
-      check: async (featureId, options) => {
-        const params = new URLSearchParams({ feature: featureId });
-        if (options?.organizationId)
-          params.set("organizationId", options.organizationId);
-        return $fetch(`/paymongo/check?${params}`, { method: "GET" });
-      },
-      track: async (featureId, options) => {
-        const result = await $fetch("/paymongo/track", {
-          method: "POST",
-          body: { feature: featureId, delta: options?.delta, organizationId: options?.organizationId }
-        });
-        if (result.data) {
-          $subscriptionSignal.set(!$subscriptionSignal.get());
-        }
-        return result;
-      }
-    }),
     pathMethods: {
-      "/paymongo/check": "GET"
+      "/paymongo/check": "GET",
+      "/paymongo/attach": "POST",
+      "/paymongo/track": "POST",
+      "/paymongo/verify": "POST",
+      "/paymongo/set-plan": "POST"
     },
     atomListeners: [
       {
@@ -1258,12 +1374,12 @@ var emit = (snapshotRef, onChange) => (value) => {
   snapshotRef.current = value;
   onChange();
 };
-function useStore(store2, { keys, deps = [store2, keys] } = {}) {
+function useStore(store, { keys, deps = [store, keys] } = {}) {
   let snapshotRef = import_react.useRef();
-  snapshotRef.current = store2.get();
+  snapshotRef.current = store.get();
   let subscribe = import_react.useCallback((onChange) => {
-    emit(snapshotRef, onChange)(store2.value);
-    return keys?.length > 0 ? listenKeys(store2, keys, emit(snapshotRef, onChange)) : store2.listen(emit(snapshotRef, onChange));
+    emit(snapshotRef, onChange)(store.value);
+    return keys?.length > 0 ? listenKeys(store, keys, emit(snapshotRef, onChange)) : store.listen(emit(snapshotRef, onChange));
   }, deps);
   let get = () => snapshotRef.current;
   return import_react.useSyncExternalStore(subscribe, get, get);
@@ -1407,8 +1523,7 @@ export {
   getOrganizationSeats,
   createSeatLimit,
   createPaymongoOrganization,
-  cache,
   $refreshTrigger
 };
 
-//# debugId=2541508279EF34DE64756E2164756E21
+//# debugId=7F1C82394DDF146A64756E2164756E21

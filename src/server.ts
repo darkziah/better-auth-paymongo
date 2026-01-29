@@ -1,7 +1,6 @@
 import type { BetterAuthPlugin } from "better-auth";
 import type { PaymongoAutumnConfig, AttachResponse, CheckResponse, UsageRecord } from "./types";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-import { cache } from "./cache";
 import { z } from "zod";
 
 export const paymongo = <
@@ -79,6 +78,10 @@ export const paymongo = <
                         type: "string",
                         required: true,
                     },
+                    referenceId: {
+                        type: "string",
+                        required: true,
+                    },
                     entityType: {
                         type: "string",
                         required: true,
@@ -126,6 +129,11 @@ export const paymongo = <
 
                     const entityType = organizationId ? 'organization' : 'user';
                     const entityId = organizationId || user.id;
+                    
+                    const referenceId = `ref_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+                    
+                    const successUrlWithRef = new URL(successUrl);
+                    successUrlWithRef.searchParams.set('ref', referenceId);
 
                     const checkoutResponse = await paymongoFetch('/checkout_sessions', {
                         method: 'POST',
@@ -141,8 +149,9 @@ export const paymongo = <
                                         }
                                     ],
                                     payment_method_types: ['card', 'gcash', 'grab_pay'],
-                                    success_url: successUrl,
+                                    success_url: successUrlWithRef.toString(),
                                     cancel_url: cancelUrl,
+                                    reference_number: referenceId,
                                     billing: {
                                         email: user.email
                                     }
@@ -164,6 +173,7 @@ export const paymongo = <
                         model: 'paymongoSession',
                         data: {
                             sessionId,
+                            referenceId,
                             entityType,
                             entityId,
                             planId,
@@ -253,8 +263,6 @@ export const paymongo = <
                         }
                     }
 
-                    cache.clear();
-
                     return ctx.json({ success: true, planId });
                 }
             ),
@@ -264,13 +272,26 @@ export const paymongo = <
                     method: 'POST',
                     use: [sessionMiddleware],
                     body: z.object({
-                        sessionId: z.string(),
+                        ref: z.string(),
                     }),
                 },
                 async (ctx) => {
-                    const { sessionId } = ctx.body;
+                    const { ref } = ctx.body;
 
-                    const sessionResponse = await paymongoFetch(`/checkout_sessions/${sessionId}`, {
+                    const pendingSession = await ctx.context.adapter.findOne({
+                        model: 'paymongoSession',
+                        where: [{ field: 'referenceId', value: ref }]
+                    }) as { sessionId: string; referenceId: string; entityType: string; entityId: string; planId: string; status: string } | null;
+
+                    if (!pendingSession) {
+                        throw new Error(`Session not found for ref: ${ref}`);
+                    }
+
+                    if (pendingSession.status === 'completed') {
+                        return ctx.json({ success: true, planId: pendingSession.planId });
+                    }
+
+                    const sessionResponse = await paymongoFetch(`/checkout_sessions/${pendingSession.sessionId}`, {
                         method: 'GET'
                     });
 
@@ -280,23 +301,10 @@ export const paymongo = <
                     }
 
                     const sessionData = await sessionResponse.json();
-                    const paymentStatus = sessionData.data.attributes.payment_status;
+                    const paymentStatus = sessionData.data?.attributes?.payment_status || sessionData.data?.attributes?.payments?.[0]?.attributes?.status;
 
                     if (paymentStatus !== 'paid') {
                         throw new Error(`Payment not completed. Status: ${paymentStatus}`);
-                    }
-
-                    const pendingSession = await ctx.context.adapter.findOne({
-                        model: 'paymongoSession',
-                        where: [{ field: 'sessionId', value: sessionId }]
-                    }) as { sessionId: string; entityType: string; entityId: string; planId: string; status: string } | null;
-
-                    if (!pendingSession) {
-                        throw new Error(`Session not found: ${sessionId}`);
-                    }
-
-                    if (pendingSession.status === 'completed') {
-                        return ctx.json({ success: true, planId: pendingSession.planId });
                     }
 
                     const plan = config.plans[pendingSession.planId];
@@ -338,6 +346,8 @@ export const paymongo = <
                             const consumed = previousUsage?.consumed ?? 0;
                             const newBalance = Math.max(0, newLimit - consumed);
                             
+                            console.log("[VERIFY] Creating usage record:", { featureId, newLimit, consumed, newBalance, planId: pendingSession.planId });
+                            
                             await ctx.context.adapter.create({
                                 model: 'paymongoUsage',
                                 data: {
@@ -349,7 +359,7 @@ export const paymongo = <
                                     periodStart: now,
                                     periodEnd,
                                     planId: pendingSession.planId,
-                                    checkoutSessionId: sessionId,
+                                    checkoutSessionId: pendingSession.sessionId,
                                     createdAt: now,
                                     updatedAt: now
                                 }
@@ -357,13 +367,12 @@ export const paymongo = <
                         }
                     }
 
+                    console.log("[VERIFY] Marking session completed, returning planId:", pendingSession.planId);
                     await ctx.context.adapter.update({
                         model: 'paymongoSession',
-                        where: [{ field: 'sessionId', value: sessionId }],
+                        where: [{ field: 'referenceId', value: ref }],
                         update: { status: 'completed' }
                     });
-
-                    cache.clear();
 
                     return ctx.json({ success: true, planId: pendingSession.planId });
                 }
@@ -397,28 +406,6 @@ export const paymongo = <
                     if (!usageRecord) {
                         return ctx.json<CheckResponse>({
                             allowed: false
-                        });
-                    }
-
-                    const cacheKey = `paymongo:${entityType}:${entityId}:session`;
-                    let sessionStatus = cache.get<string>(cacheKey);
-
-                    if (!sessionStatus && usageRecord.checkoutSessionId) {
-                        const response = await paymongoFetch(`/checkout_sessions/${usageRecord.checkoutSessionId}`, { 
-                            method: 'GET' 
-                        });
-                        
-                        if (response.ok) {
-                            const data = await response.json();
-                            sessionStatus = data.data.attributes.payment_intent?.attributes?.status || 'pending';
-                            cache.set(cacheKey, sessionStatus, 60);
-                        }
-                    }
-
-                    if (sessionStatus && sessionStatus !== 'succeeded') {
-                        return ctx.json<CheckResponse>({
-                            allowed: false,
-                            planId: usageRecord.planId
                         });
                     }
 

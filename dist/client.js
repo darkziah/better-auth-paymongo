@@ -5,39 +5,15 @@ var paymongoClient = () => {
   return {
     id: "paymongo",
     $InferServerPlugin: {},
-    getAtoms: ($fetch) => ({
+    getAtoms: () => ({
       $subscriptionSignal
     }),
-    getActions: ($fetch) => ({
-      attach: async (planId, options) => {
-        const result = await $fetch("/paymongo/attach", {
-          method: "POST",
-          body: { planId, ...options }
-        });
-        if (result.data) {
-          $subscriptionSignal.set(!$subscriptionSignal.get());
-        }
-        return result;
-      },
-      check: async (featureId, options) => {
-        const params = new URLSearchParams({ feature: featureId });
-        if (options?.organizationId)
-          params.set("organizationId", options.organizationId);
-        return $fetch(`/paymongo/check?${params}`, { method: "GET" });
-      },
-      track: async (featureId, options) => {
-        const result = await $fetch("/paymongo/track", {
-          method: "POST",
-          body: { feature: featureId, delta: options?.delta, organizationId: options?.organizationId }
-        });
-        if (result.data) {
-          $subscriptionSignal.set(!$subscriptionSignal.get());
-        }
-        return result;
-      }
-    }),
     pathMethods: {
-      "/paymongo/check": "GET"
+      "/paymongo/check": "GET",
+      "/paymongo/attach": "POST",
+      "/paymongo/track": "POST",
+      "/paymongo/verify": "POST",
+      "/paymongo/set-plan": "POST"
     },
     atomListeners: [
       {
@@ -51,4 +27,4 @@ export {
   paymongoClient
 };
 
-//# debugId=E5A0B61EB21DCDDE64756E2164756E21
+//# debugId=2CF746EAD9D89C1164756E2164756E21
