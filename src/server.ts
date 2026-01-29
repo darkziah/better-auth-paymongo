@@ -160,36 +160,17 @@ export const paymongo = <
                     const sessionId = checkoutData.data.id;
                     const checkoutUrl = checkoutData.data.attributes.checkout_url;
 
-                    const now = new Date();
-                    const periodEnd = new Date(now);
-                    periodEnd.setMonth(periodEnd.getMonth() + (plan.interval === 'yearly' ? 12 : 1));
-
-                    const planFeatures = plan.features;
-                    
-                    for (const [featureId, featureValue] of Object.entries(planFeatures)) {
-                        const featureConfig = config.features[featureId];
-                        
-                        if (featureConfig && featureConfig.type === 'metered') {
-                            const limit = typeof featureValue === 'number' ? featureValue : featureConfig.limit;
-                            
-                            await ctx.context.adapter.create({
-                                model: 'paymongoUsage',
-                                data: {
-                                    entityType,
-                                    entityId,
-                                    featureId,
-                                    balance: limit,
-                                    limit,
-                                    periodStart: now,
-                                    periodEnd,
-                                    planId,
-                                    checkoutSessionId: sessionId,
-                                    createdAt: now,
-                                    updatedAt: now
-                                }
-                            });
+                    await ctx.context.adapter.create({
+                        model: 'paymongoSession',
+                        data: {
+                            sessionId,
+                            entityType,
+                            entityId,
+                            planId,
+                            status: 'pending',
+                            createdAt: new Date()
                         }
-                    }
+                    });
 
                     return ctx.json<AttachResponse>({
                         checkoutUrl,
