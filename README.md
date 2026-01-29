@@ -253,6 +253,97 @@ await authClient.paymongo.track("api_calls", {
 
 ---
 
+## Seat-Based Organization Billing
+
+The plugin provides built-in support for seat-based billing in organizations. This allows you to limit the number of members an organization can have based on their active subscription plan.
+
+### Example Setup
+
+To enable seat-based billing, use the `createPaymongoOrganization` helper when configuring the Better-Auth organization plugin.
+
+```typescript
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { paymongo, createPaymongoOrganization } from "better-auth-paymongo";
+
+const paymongoConfig = {
+  secretKey: process.env.PAYMONGO_SECRET_KEY!,
+  features: {
+    seats: { type: "metered", limit: 5 },
+    projects: { type: "metered", limit: 10 },
+  },
+  plans: {
+    starter: {
+      amount: 49900,
+      currency: "PHP",
+      displayName: "Starter",
+      interval: "monthly",
+      features: { seats: 5, projects: 10 },
+    },
+    pro: {
+      amount: 99900,
+      currency: "PHP",
+      displayName: "Pro", 
+      interval: "monthly",
+      features: { seats: 25, projects: 50 },
+    },
+  },
+};
+
+export const auth = betterAuth({
+  plugins: [
+    paymongo(paymongoConfig),
+    organization({
+      ...createPaymongoOrganization(paymongoConfig),
+    }),
+  ],
+});
+```
+
+### API Reference
+
+#### `createPaymongoOrganization(config, seatConfig?)`
+
+Creates an organization plugin configuration with `membershipLimit` integration.
+
+- **Parameters:**
+  - `config`: Your `PaymongoAutumnConfig`
+  - `seatConfig`: (Optional)
+    - `featureId`: Feature ID to use (defaults to `'seats'`)
+    - `defaultLimit`: Limit when no subscription exists (defaults to `5`)
+- **Returns:** An object with `membershipLimit` function.
+
+#### `createSeatLimit(adapter, options?)`
+
+Creates a standalone `membershipLimit` function if you prefer not to use the helper above.
+
+```typescript
+organization({
+  membershipLimit: createSeatLimit(adapter, {
+    featureId: 'seats',
+    defaultLimit: 5
+  })
+})
+```
+
+#### `getOrganizationSeats(adapter, orgId, featureId?)`
+
+Retrieves structured seat usage information for an organization.
+
+```typescript
+const { used, limit, remaining } = await getOrganizationSeats(adapter, "org_123");
+```
+
+### How it Works
+
+Seats are treated as a standard **metered feature**. When a user tries to join or be invited to an organization, Better-Auth calls the `membershipLimit` function. This plugin then checks the `paymongoUsage` table for the organization's current `seats` balance.
+
+- No special database tables are needed beyond `paymongoUsage`.
+- Limits are automatically synced from PayMongo when the organization checks its features.
+- If no subscription exists, it falls back to the `defaultLimit`.
+
+---
+
 ## React Hooks
 
 ```typescript
