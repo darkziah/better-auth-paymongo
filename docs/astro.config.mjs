@@ -8,6 +8,7 @@ export default defineConfig({
     starlight({
       title: 'better-auth-paymongo',
       description: 'PayMongo payment plugin for Better-Auth with feature-based billing',
+      customCss: ['./src/styles/bun-theme.css'],
       social: {
         github: 'https://github.com/darkziah/better-auth-paymongo',
       },
