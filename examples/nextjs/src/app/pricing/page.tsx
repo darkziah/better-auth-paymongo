@@ -36,7 +36,8 @@ const plans = [
 
 export default function PricingPage() {
   async function subscribe(planId: string) {
-    const { data, error } = await authClient.paymongo.attach(planId, {
+    const { data, error } = await authClient.paymongo.attach({
+      planId,
       successUrl: `${window.location.origin}/billing?success=true`,
       cancelUrl: `${window.location.origin}/pricing`,
     });

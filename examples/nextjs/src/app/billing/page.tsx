@@ -10,7 +10,7 @@ function UsageMeter({ featureId, label }: { featureId: string; label: string }) 
 
   useEffect(() => {
     authClient.paymongo
-      .check(featureId)
+      .check({ query: { feature: featureId } })
       .then(({ data }) => {
         if (data) setUsage(data);
       })
@@ -66,7 +66,7 @@ function CurrentPlan() {
 
   useEffect(() => {
     authClient.paymongo
-      .check("projects")
+      .check({ query: { feature: "projects" } })
       .then(({ data }) => setPlanId(data?.planId || null))
       .catch(console.error);
   }, []);
@@ -98,7 +98,7 @@ function FeatureAccess({ featureId, label }: { featureId: string; label: string 
 
   useEffect(() => {
     authClient.paymongo
-      .check(featureId)
+      .check({ query: { feature: featureId } })
       .then(({ data }) => setAllowed(data?.allowed ?? null))
       .catch(console.error);
   }, [featureId]);
