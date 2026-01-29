@@ -1,0 +1,1 @@
+- Documented the paymongoUsage database schema to provide clear visibility into the plugin's data model.

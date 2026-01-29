@@ -1,0 +1,1 @@
+- Created Client SDK Reference documentation in docs/src/content/docs/api/client.md

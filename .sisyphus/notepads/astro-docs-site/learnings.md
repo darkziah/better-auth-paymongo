@@ -1,0 +1,3 @@
+- Created guides/organization-billing.md and guides/examples.md
+- Created concepts/autumn-pattern.md and concepts/feature-types.md
+- Documentation covers seat-based billing, practical examples, the Autumn pattern, and feature types (boolean vs metered).

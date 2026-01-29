@@ -1,0 +1,1 @@
+- Created Server API Reference documentation focusing on the paymongo() server plugin and its endpoints.
