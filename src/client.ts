@@ -17,6 +17,8 @@ export const paymongoClient = () => {
 			"/paymongo/check": "GET",
 			"/paymongo/attach": "POST",
 			"/paymongo/track": "POST",
+			"/paymongo/verify": "POST",
+			"/paymongo/set-plan": "POST",
 		},
 
 		atomListeners: [

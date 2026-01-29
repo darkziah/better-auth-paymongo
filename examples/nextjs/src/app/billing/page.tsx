@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
 import type { CheckResponse } from "better-auth-paymongo";
 
 function UsageMeter({ featureId, label }: { featureId: string; label: string }) {
   const [usage, setUsage] = useState<CheckResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [consuming, setConsuming] = useState(false);
 
-  useEffect(() => {
+  const fetchUsage = () => {
     authClient.paymongo
       .check({ query: { feature: featureId } })
       .then(({ data }) => {
@@ -16,7 +18,23 @@ function UsageMeter({ featureId, label }: { featureId: string; label: string }) 
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchUsage();
   }, [featureId]);
+
+  const consumeResource = async (amount: number) => {
+    setConsuming(true);
+    try {
+      await authClient.paymongo.track({ feature: featureId, delta: amount });
+      fetchUsage();
+    } catch (err) {
+      console.error("Failed to consume:", err);
+    } finally {
+      setConsuming(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -57,6 +75,29 @@ function UsageMeter({ featureId, label }: { featureId: string; label: string }) 
       {!usage.allowed && (
         <p className="text-red-500 text-sm mt-2">Limit reached</p>
       )}
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={() => consumeResource(1)}
+          disabled={consuming || !usage.allowed}
+          className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Use 1
+        </button>
+        <button
+          onClick={() => consumeResource(10)}
+          disabled={consuming || !usage.allowed}
+          className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Use 10
+        </button>
+        <button
+          onClick={() => consumeResource(50)}
+          disabled={consuming || !usage.allowed}
+          className="px-3 py-1.5 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Use 50
+        </button>
+      </div>
     </div>
   );
 }
@@ -120,6 +161,35 @@ function FeatureAccess({ featureId, label }: { featureId: string; label: string 
 }
 
 export default function BillingPage() {
+  const searchParams = useSearchParams();
+  const sessionId = searchParams.get("session_id");
+  const [verifying, setVerifying] = useState(!!sessionId);
+  const [verified, setVerified] = useState(false);
+
+  useEffect(() => {
+    if (sessionId && !verified) {
+      authClient.paymongo
+        .verify({ sessionId })
+        .then(({ data, error }) => {
+          if (error) throw error;
+          setVerified(true);
+          window.history.replaceState({}, "", "/billing");
+          window.location.reload();
+        })
+        .catch(console.error)
+        .finally(() => setVerifying(false));
+    }
+  }, [sessionId, verified]);
+
+  if (verifying) {
+    return (
+      <div className="text-center py-20">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4" />
+        <p className="text-lg">Verifying payment...</p>
+      </div>
+    );
+  }
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-8">Billing Dashboard</h1>
