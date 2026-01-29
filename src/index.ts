@@ -10,6 +10,9 @@ export { useCheck, useSubscription, refreshBilling, $refreshTrigger } from './re
 // Cache
 export { cache } from './cache';
 
+// Organization
+export { createPaymongoOrganization, createSeatLimit, getOrganizationSeats } from './organization';
+
 // Types
 export type {
   FeatureConfig,
@@ -20,3 +23,4 @@ export type {
   TrackResponse,
   UsageRecord,
 } from './types';
+export type { SeatConfig } from './organization';

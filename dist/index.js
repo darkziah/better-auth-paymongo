@@ -1332,14 +1332,83 @@ function useSubscription() {
 function refreshBilling() {
   $refreshTrigger.set($refreshTrigger.get() + 1);
 }
+// src/organization.ts
+function createPaymongoOrganization(config, seatConfig) {
+  const featureId = seatConfig?.featureId ?? "seats";
+  const defaultLimit = seatConfig?.defaultLimit ?? 5;
+  return {
+    membershipLimit: async ({
+      organizationId,
+      adapter
+    }) => {
+      const usageRecord = await adapter.findOne({
+        model: "paymongoUsage",
+        where: [
+          { field: "entityType", value: "organization" },
+          { field: "entityId", value: organizationId },
+          { field: "featureId", value: featureId }
+        ]
+      });
+      if (!usageRecord) {
+        return defaultLimit;
+      }
+      return usageRecord.limit;
+    }
+  };
+}
+function createSeatLimit(adapter, options) {
+  const featureId = options?.featureId ?? "seats";
+  const defaultLimit = options?.defaultLimit ?? 5;
+  return async ({ organizationId }) => {
+    const usageRecord = await adapter.findOne({
+      model: "paymongoUsage",
+      where: [
+        { field: "entityType", value: "organization" },
+        { field: "entityId", value: organizationId },
+        { field: "featureId", value: featureId }
+      ]
+    });
+    if (!usageRecord) {
+      return defaultLimit;
+    }
+    return usageRecord.limit;
+  };
+}
+async function getOrganizationSeats(adapter, orgId, featureId = "seats") {
+  const usageRecord = await adapter.findOne({
+    model: "paymongoUsage",
+    where: [
+      { field: "entityType", value: "organization" },
+      { field: "entityId", value: orgId },
+      { field: "featureId", value: featureId }
+    ]
+  });
+  if (!usageRecord) {
+    return {
+      used: 0,
+      limit: 5,
+      remaining: 5
+    };
+  }
+  const used = usageRecord.limit - usageRecord.balance;
+  const remaining = usageRecord.balance;
+  return {
+    used,
+    limit: usageRecord.limit,
+    remaining
+  };
+}
 export {
   useSubscription,
   useCheck,
   refreshBilling,
   paymongoClient,
   paymongo,
+  getOrganizationSeats,
+  createSeatLimit,
+  createPaymongoOrganization,
   cache,
   $refreshTrigger
 };
 
-//# debugId=6E99F09A6DEEE4E864756E2164756E21
+//# debugId=2541508279EF34DE64756E2164756E21
