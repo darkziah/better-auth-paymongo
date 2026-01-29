@@ -19,7 +19,7 @@ export default function RootLayout({
               <a href="/" className="text-xl font-bold text-orange-600">
                 PayMongo Demo
               </a>
-              <div className="flex gap-4">
+              <div className="flex gap-4 items-center">
                 <a
                   href="/pricing"
                   className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
@@ -31,6 +31,12 @@ export default function RootLayout({
                   className="text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 >
                   Billing
+                </a>
+                <a
+                  href="/auth"
+                  className="px-4 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                >
+                  Sign In
                 </a>
               </div>
             </div>
