@@ -27,11 +27,12 @@
   ],
   "scripts": {
     "build": "bun run build:js && bun run build:types",
-    "build:js": "bun build src/index.ts src/client.ts src/react.ts --outdir dist --target node --format esm --sourcemap=external --external better-auth --external zod --external react --external @better-fetch/fetch",
+    "build:js": "bun build src/client.ts --outdir dist --target browser --format esm --sourcemap=external --external nanostores && bun build src/index.ts --outdir dist --target node --format esm --sourcemap=external --external ./client --external better-auth --external zod && bun build src/react.ts --outdir dist --target browser --format esm --sourcemap=external --external better-auth-paymongo/client --external react --external @nanostores/react --external nanostores",
     "build:types": "tsc --emitDeclarationOnly --declaration --outDir dist",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "dev": "bun run build:js --watch"
   },
   "keywords": [
     "better-auth",
@@ -71,6 +72,7 @@
   },
   "dependencies": {
     "@better-fetch/fetch": "^1.0.0",
+    "@nanostores/query": "^0.3.4",
     "@nanostores/react": "^1.0.0",
     "nanostores": "^1.1.0"
   }

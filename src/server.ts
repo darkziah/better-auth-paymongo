@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
-import type { PaymongoAutumnConfig, AttachResponse } from "./types";
+import type { PaymongoAutumnConfig, AttachResponse, CheckResponse, UsageRecord } from "./types";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import { cache } from "./cache";
 
 export const paymongo = <
     TPlans extends Record<string, any>,
@@ -166,6 +167,144 @@ export const paymongo = <
                         checkoutUrl,
                         sessionId
                     });
+                }
+            ),
+            check: createAuthEndpoint(
+                '/paymongo/check',
+                {
+                    method: 'GET',
+                    use: [sessionMiddleware]
+                },
+                async (ctx) => {
+                    const user = ctx.context.session.user;
+                    const query = ctx.query as {
+                        feature: string;
+                        organizationId?: string;
+                    };
+
+                    const { feature: featureId, organizationId } = query;
+
+                    if (!featureId) {
+                        throw new Error('Missing required query param: feature');
+                    }
+
+                    const entityType = organizationId ? 'organization' : 'user';
+                    const entityId = organizationId || user.id;
+
+                    const usageRecord = await ctx.context.adapter.findOne({
+                        model: 'paymongoUsage',
+                        where: [
+                            { field: 'entityType', value: entityType },
+                            { field: 'entityId', value: entityId },
+                            { field: 'featureId', value: featureId }
+                        ]
+                    }) as UsageRecord | null;
+
+                    if (!usageRecord) {
+                        return ctx.json<CheckResponse>({
+                            allowed: false
+                        });
+                    }
+
+                    const cacheKey = `paymongo:${entityType}:${entityId}:session`;
+                    let sessionStatus = cache.get<string>(cacheKey);
+
+                    if (!sessionStatus && usageRecord.checkoutSessionId) {
+                        const response = await paymongoFetch(`/checkout_sessions/${usageRecord.checkoutSessionId}`, { 
+                            method: 'GET' 
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            sessionStatus = data.data.attributes.payment_intent?.attributes?.status || 'pending';
+                            cache.set(cacheKey, sessionStatus, 60);
+                        }
+                    }
+
+                    if (sessionStatus && sessionStatus !== 'succeeded') {
+                        return ctx.json<CheckResponse>({
+                            allowed: false,
+                            planId: usageRecord.planId
+                        });
+                    }
+
+                    const featureConfig = config.features[featureId];
+                    const now = new Date();
+
+                    if (usageRecord.periodEnd < now) {
+                        const newPeriodEnd = new Date(now);
+                        newPeriodEnd.setMonth(newPeriodEnd.getMonth() + 1);
+                        
+                        await ctx.context.adapter.update({
+                            model: 'paymongoUsage',
+                            where: [{ field: 'id', value: usageRecord.id }],
+                            update: {
+                                balance: usageRecord.limit,
+                                periodStart: now,
+                                periodEnd: newPeriodEnd,
+                                updatedAt: now
+                            }
+                        });
+
+                        usageRecord.balance = usageRecord.limit;
+                        usageRecord.periodStart = now;
+                        usageRecord.periodEnd = newPeriodEnd;
+                    }
+
+                    if (featureConfig && featureConfig.type === 'metered') {
+                        return ctx.json<CheckResponse>({
+                            allowed: usageRecord.balance > 0,
+                            balance: usageRecord.balance,
+                            limit: usageRecord.limit,
+                            planId: usageRecord.planId
+                        });
+                    } else {
+                        return ctx.json<CheckResponse>({
+                            allowed: true,
+                            planId: usageRecord.planId
+                        });
+                    }
+                }
+            ),
+            track: createAuthEndpoint(
+                '/paymongo/track',
+                {
+                    method: 'POST',
+                    use: [sessionMiddleware]
+                },
+                async (ctx) => {
+                    const user = ctx.context.session.user;
+                    const { feature, delta = 1, organizationId } = ctx.body as {
+                        feature: string;
+                        delta?: number;
+                        organizationId?: string;
+                    };
+
+                    const entityType = organizationId ? 'organization' : 'user';
+                    const entityId = organizationId || user.id;
+
+                    const usageRecord = await ctx.context.adapter.findOne({
+                        model: 'paymongoUsage',
+                        where: [
+                            { field: 'entityType', value: entityType },
+                            { field: 'entityId', value: entityId },
+                            { field: 'featureId', value: feature }
+                        ]
+                    }) as UsageRecord | null;
+
+                    if (!usageRecord) {
+                        throw new Error(`No usage record found for feature: ${feature}`);
+                    }
+
+                    const newBalance = Math.max(0, usageRecord.balance - delta);
+
+                    await ctx.context.adapter.update({
+                        model: 'paymongoUsage',
+                        where: [{ field: 'id', value: usageRecord.id }],
+                        update: { balance: newBalance, updatedAt: new Date() }
+                    });
+
+                    return ctx.json({ success: true, balance: newBalance, limit: usageRecord.limit });
                 }
             )
         }

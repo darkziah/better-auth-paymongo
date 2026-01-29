@@ -36,18 +36,21 @@ import { paymongo } from "better-auth-paymongo";
 // Define your plans
 const plans = {
   free: {
-    priceId: "",
+    amount: 0,
+    currency: "PHP",
     displayName: "Free",
     limits: { projects: 3, apiCalls: 1000 }
   },
   pro: {
-    priceId: "price_xxxxx", // PayMongo Price ID
+    amount: 99900, // 999.00 PHP (in centavos)
+    currency: "PHP",
     displayName: "Pro",
     limits: { projects: 10, apiCalls: 10000 },
     interval: "month"
   },
   enterprise: {
-    priceId: "price_yyyyy",
+    amount: 999900, // 9,999.00 PHP (in centavos)
+    currency: "PHP",
     displayName: "Enterprise", 
     limits: { projects: -1, apiCalls: -1 }, // -1 = unlimited
     interval: "year"
@@ -57,7 +60,8 @@ const plans = {
 // Define add-ons (optional)
 const addons = {
   extraProjects: {
-    priceId: "price_addon_xxxxx",
+    amount: 19900, // 199.00 PHP (in centavos)
+    currency: "PHP",
     displayName: "Extra Projects",
     type: "quantity" as const,
     limitBonuses: { projects: 5 }
@@ -223,7 +227,8 @@ Plans can include trial periods that don't require payment:
 ```typescript
 const plans = {
   pro: {
-    priceId: "price_xxx",
+    amount: 99900, // 999.00 PHP (in centavos)
+    currency: "PHP",
     displayName: "Pro",
     limits: { projects: 10 },
     trialPeriodDays: 14 // 14-day free trial
