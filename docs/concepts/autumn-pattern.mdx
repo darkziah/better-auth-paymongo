@@ -33,40 +33,33 @@ Named after the [Autumn billing service](https://useautumn.com) that pioneered t
 
 ## Flow Diagram
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                         YOUR APP                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. User clicks "Subscribe"                                 │
-│         │                                                   │
-│         ▼                                                   │
-│  ┌─────────────┐                                           │
-│  │ POST /attach │ ──────────► Create checkout session      │
-│  └─────────────┘              Store in paymongoUsage       │
-│         │                                                   │
-│         ▼                                                   │
-│  Redirect to PayMongo ────────────────────────────────┐    │
-│                                                        │    │
-│  ┌─────────────────────────────────────────────────┐  │    │
-│  │              PAYMONGO CHECKOUT                   │  │    │
-│  │                                                  │  │    │
-│  │  User enters payment details and completes      │◄─┘    │
-│  │                                                  │       │
-│  └─────────────────────────────────────────────────┘       │
-│         │                                                   │
-│         ▼                                                   │
-│  Redirect to success URL ◄──────────────────────────       │
-│         │                                                   │
-│         ▼                                                   │
-│  ┌────────────┐                                            │
-│  │ GET /check │ ──────────► Verify payment via API         │
-│  └────────────┘              (60s cache)                   │
-│         │                                                   │
-│         ▼                                                   │
-│  Access granted ✓                                          │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant User
+    participant App as Your App
+    participant DB as paymongoUsage
+    participant PM as PayMongo
+
+    User->>App: Click "Subscribe"
+    App->>PM: POST /checkout_sessions
+    PM-->>App: checkoutUrl, sessionId
+    App->>DB: Store session (pending)
+    App-->>User: Redirect to PayMongo
+
+    User->>PM: Complete payment
+    PM-->>User: Redirect to successUrl
+
+    User->>App: Access feature
+    App->>App: GET /check
+    App->>PM: Verify session status
+    PM-->>App: paid: true
+    App->>DB: Update status, set limits
+    App-->>User: Access granted ✓
+
+    User->>App: Use metered feature
+    App->>App: POST /track
+    App->>DB: Decrement balance
+    App-->>User: Usage recorded
 ```
 
 ## Benefits
