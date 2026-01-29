@@ -1,31 +1,39 @@
-/* Bun-inspired theme for better-auth-paymongo docs */
-/* Based on https://bun.sh documentation style */
+/* Bun docs theme - exact match */
+/* https://bun.sh/docs */
 
-/* ===== Color Scheme: Bun Pink ===== */
+/* ===== Bun Fonts ===== */
+@font-face {
+  font-family: 'Inter Display Bold';
+  src: url('https://mintlify-assets.b-cdn.net/fonts/InterDisplay-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+
+/* ===== Color Scheme: Exact Bun Colors ===== */
 :root {
-  /* Accent colors - Bun Pink */
-  --sl-color-accent-low: #301620;
-  --sl-color-accent: #f472b6;
-  --sl-color-accent-high: #fbbfd9;
+  /* Primary: rgb(255, 115, 168) = #ff73a8 */
+  --sl-color-accent-low: #2d1520;
+  --sl-color-accent: #ff73a8;
+  --sl-color-accent-high: #ff99bf;
   
-  /* Text colors */
+  /* Bun gray scale (from their CSS) */
   --sl-color-white: #ffffff;
-  --sl-color-gray-1: #f8fafc;
-  --sl-color-gray-2: #e2e8f0;
-  --sl-color-gray-3: #cbd5e1;
-  --sl-color-gray-4: #94a3b8;
-  --sl-color-gray-5: #64748b;
-  --sl-color-gray-6: #475569;
+  --sl-color-gray-1: #faf6f7;
+  --sl-color-gray-2: #f5f1f3;
+  --sl-color-gray-3: #e6e2e3;
+  --sl-color-gray-4: #d5d1d3;
+  --sl-color-gray-5: #a6a2a3;
+  --sl-color-gray-6: #574345;
   
-  /* Background */
-  --sl-color-black: #0f0f0f;
-  --sl-color-bg: #0f0f0f;
-  --sl-color-bg-nav: rgba(15, 15, 15, 0.85);
-  --sl-color-bg-sidebar: #0f0f0f;
+  /* Background: rgb(14, 11, 14) = #0e0b0e */
+  --sl-color-black: #0e0b0e;
+  --sl-color-bg: #0e0b0e;
+  --sl-color-bg-nav: rgba(14, 11, 14, 0.9);
+  --sl-color-bg-sidebar: #0e0b0e;
   
-  /* Fonts */
-  --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --sl-font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  /* Fonts - Bun uses Inter Display Bold for headings, Inter for body */
+  --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --sl-font-mono: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Consolas, monospace;
   
   /* Sizing */
   --sl-content-width: 50rem;
@@ -50,31 +58,32 @@
   --sl-color-bg-sidebar: #fafafa;
 }
 
-/* ===== Typography ===== */
+/* ===== Typography - Bun Style ===== */
 
-/* Headings - bold and clean */
 h1, h2, h3, h4, h5, h6 {
+  font-family: 'Inter Display Bold', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-weight: 700;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.025em;
 }
 
 h1 {
-  font-size: 2.5rem;
-  line-height: 1.1;
-  margin-bottom: 1.5rem;
+  font-size: 2.25rem;
+  line-height: 1.15;
+  margin-bottom: 1rem;
 }
 
 h2 {
-  font-size: 1.75rem;
-  margin-top: 3rem;
-  margin-bottom: 1rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--sl-color-hairline-light);
+  font-size: 1.5rem;
+  margin-top: 2.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 h3 {
   font-size: 1.25rem;
   margin-top: 2rem;
+  margin-bottom: 0.5rem;
 }
 
 /* Body text */
@@ -126,56 +135,75 @@ code {
   border-top-right-radius: 0;
 }
 
-/* ===== Sidebar ===== */
+/* ===== Sidebar - Bun Style ===== */
 
-/* Sidebar styling */
-.sidebar-content {
-  padding: 1rem;
+nav.sidebar {
+  font-size: 0.825rem;
 }
 
 nav.sidebar a {
-  font-size: 0.875rem;
   font-weight: 500;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.75rem;
   border-radius: 6px;
   transition: all 0.15s ease;
+  color: var(--sl-color-gray-3);
 }
 
 nav.sidebar a:hover {
-  background: rgba(244, 114, 182, 0.1);
-  color: var(--sl-color-accent);
+  background: rgba(255, 115, 168, 0.08);
+  color: #ff73a8;
 }
 
 nav.sidebar a[aria-current='page'] {
-  background: rgba(244, 114, 182, 0.15);
-  color: var(--sl-color-accent);
+  background: rgba(255, 115, 168, 0.12);
+  color: #ff73a8;
   font-weight: 600;
 }
 
-/* Sidebar group labels */
 .sidebar-group > summary,
-.sidebar-group > .group-label {
+.sidebar-group > .group-label,
+.top-level > summary {
+  font-family: 'Inter Display Bold', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--sl-color-gray-4);
-  padding: 0.5rem 0.75rem;
+  padding: 0.75rem 0.75rem 0.4rem;
 }
 
-/* ===== Navigation ===== */
+/* ===== Header/Navigation - Bun Style ===== */
 
-/* Top nav styling */
+.site-title {
+  font-family: 'Inter Display Bold', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
 header.header {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(14, 11, 14, 0.85);
 }
 
-/* Site title */
-.site-title {
-  font-weight: 700;
-  font-size: 1.125rem;
+starlight-menu-button {
+  color: var(--sl-color-gray-3);
+}
+
+/* Search button - Bun style */
+button[data-open-modal] {
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+}
+
+button[data-open-modal]:hover {
+  border-color: rgba(255, 115, 168, 0.4);
+  background: rgba(255, 115, 168, 0.08);
 }
 
 /* ===== Links ===== */
@@ -312,19 +340,6 @@ tr:hover td {
 .hero .action.primary:hover {
   background: var(--sl-color-accent-high);
   transform: translateY(-2px);
-}
-
-/* ===== Search ===== */
-
-button[data-open-modal] {
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-button[data-open-modal]:hover {
-  border-color: rgba(244, 114, 182, 0.3);
-  background: rgba(244, 114, 182, 0.05);
 }
 
 /* ===== Footer ===== */
