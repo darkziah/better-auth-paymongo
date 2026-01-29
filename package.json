@@ -35,7 +35,11 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run build",
-    "dev": "bun run build:js --watch"
+    "dev": "bun run build:js --watch",
+    "release": "bun run build && npm publish",
+    "release:patch": "npm version patch && bun run release",
+    "release:minor": "npm version minor && bun run release",
+    "release:major": "npm version major && bun run release"
   },
   "keywords": [
     "better-auth",
