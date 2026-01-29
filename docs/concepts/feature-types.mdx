@@ -1,0 +1,198 @@
+---
+title: Feature Types
+description: Boolean vs Metered features explained
+---
+
+# Feature Types
+
+better-auth-paymongo supports two types of features: **boolean** and **metered**.
+
+## Boolean Features
+
+Simple on/off access control. Either the plan includes the feature or it doesn't.
+
+```typescript
+features: {
+  api_access: { type: "boolean" },
+  export_pdf: { type: "boolean" },
+  priority_support: { type: "boolean" },
+}
+```
+
+### Use Cases
+
+- Premium features (export, API access)
+- Support tiers (basic, priority, enterprise)
+- Feature flags (beta features, early access)
+
+### Plan Configuration
+
+```typescript
+plans: {
+  free: {
+    features: {
+      api_access: false,
+      export_pdf: false,
+      priority_support: false,
+    },
+  },
+  pro: {
+    features: {
+      api_access: true,
+      export_pdf: true,
+      priority_support: true,
+    },
+  },
+}
+```
+
+### Checking Boolean Features
+
+```typescript
+const { allowed } = await authClient.paymongo.check("api_access");
+
+if (!allowed) {
+  throw new Error("API access requires Pro plan");
+}
+```
+
+---
+
+## Metered Features
+
+Usage-limited features with a balance that decrements over the billing period.
+
+```typescript
+features: {
+  projects: { type: "metered", limit: 5 },
+  api_calls: { type: "metered", limit: 1000 },
+  seats: { type: "metered", limit: 3 },
+}
+```
+
+<Note>
+  The `limit` in the feature definition is the **default** for users without a plan. Plans override this limit.
+</Note>
+
+### Use Cases
+
+- Resource limits (projects, workspaces, files)
+- API quotas (requests per month)
+- Team seats (members per organization)
+- Storage (GB per month)
+
+### Plan Configuration
+
+```typescript
+plans: {
+  starter: {
+    features: {
+      projects: 10,      // Override: 10 projects
+      api_calls: 5000,   // Override: 5,000 calls
+      seats: 5,          // Override: 5 team members
+    },
+  },
+  pro: {
+    features: {
+      projects: 100,
+      api_calls: 50000,
+      seats: 25,
+    },
+  },
+}
+```
+
+### Checking Metered Features
+
+```typescript
+const { allowed, balance, limit } = await authClient.paymongo.check("projects");
+
+if (!allowed || balance === 0) {
+  throw new Error("Project limit reached");
+}
+
+console.log(`${limit - balance} of ${limit} projects used`);
+```
+
+### Tracking Usage
+
+After using a metered feature, decrement the balance:
+
+```typescript
+// Default: decrement by 1
+await authClient.paymongo.track("projects");
+
+// Custom amount
+await authClient.paymongo.track("api_calls", { delta: 5 });
+```
+
+---
+
+## Comparison
+
+| Aspect | Boolean | Metered |
+|--------|---------|---------|
+| Value Type | `true` / `false` | Number (limit) |
+| Check Response | `allowed` only | `allowed`, `balance`, `limit` |
+| Tracking | Not needed | Required |
+| Reset | N/A | Per billing period |
+| Use Case | Access control | Usage limits |
+
+## Combining Both Types
+
+Most SaaS apps use a combination:
+
+```typescript
+features: {
+  // Metered - usage limits
+  projects: { type: "metered", limit: 3 },
+  api_calls: { type: "metered", limit: 100 },
+  storage_gb: { type: "metered", limit: 1 },
+  
+  // Boolean - feature access
+  api_access: { type: "boolean" },
+  custom_domain: { type: "boolean" },
+  sso: { type: "boolean" },
+  audit_logs: { type: "boolean" },
+},
+
+plans: {
+  free: {
+    features: {
+      projects: 3,
+      api_calls: 100,
+      storage_gb: 1,
+      api_access: false,
+      custom_domain: false,
+      sso: false,
+      audit_logs: false,
+    },
+  },
+  team: {
+    features: {
+      projects: 50,
+      api_calls: 10000,
+      storage_gb: 100,
+      api_access: true,
+      custom_domain: true,
+      sso: false,
+      audit_logs: false,
+    },
+  },
+  enterprise: {
+    features: {
+      projects: -1,        // -1 = unlimited
+      api_calls: -1,
+      storage_gb: -1,
+      api_access: true,
+      custom_domain: true,
+      sso: true,
+      audit_logs: true,
+    },
+  },
+}
+```
+
+<Tip>
+  Use `-1` as a special value for "unlimited" metered features on enterprise plans.
+</Tip>

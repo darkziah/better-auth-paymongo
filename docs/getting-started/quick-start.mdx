@@ -1,0 +1,118 @@
+---
+title: Quick Start
+description: Get up and running with better-auth-paymongo in minutes
+---
+
+# Quick Start
+
+## 1. Configure Server Plugin
+
+Add the `paymongo` plugin to your Better-Auth server configuration:
+
+```typescript server.ts
+import { betterAuth } from "better-auth";
+import { paymongo } from "better-auth-paymongo";
+
+export const auth = betterAuth({
+  plugins: [
+    paymongo({
+      secretKey: process.env.PAYMONGO_SECRET_KEY!,
+      features: {
+        projects: { type: "metered", limit: 5 },
+        api_access: { type: "boolean" },
+        export_pdf: { type: "boolean" },
+      },
+      plans: {
+        starter: {
+          amount: 49900, // ₱499.00 in centavos
+          currency: "PHP",
+          displayName: "Starter Plan",
+          interval: "monthly",
+          features: {
+            projects: 10,
+            api_access: false,
+            export_pdf: false,
+          },
+        },
+        pro: {
+          amount: 99900, // ₱999.00 in centavos
+          currency: "PHP",
+          displayName: "Pro Plan",
+          interval: "monthly",
+          features: {
+            projects: 100,
+            api_access: true,
+            export_pdf: true,
+          },
+        },
+      },
+    }),
+  ],
+});
+```
+
+## 2. Configure Client
+
+Add the `paymongoClient` plugin to your auth client:
+
+```typescript lib/auth-client.ts
+import { createAuthClient } from "better-auth/client";
+import { paymongoClient } from "better-auth-paymongo/client";
+
+export const authClient = createAuthClient({
+  plugins: [paymongoClient()],
+});
+```
+
+## 3. Create a Pricing Page
+
+```tsx components/pricing.tsx
+"use client";
+import { authClient } from "@/lib/auth-client";
+
+const plans = [
+  { id: "starter", name: "Starter", price: "₱499/mo" },
+  { id: "pro", name: "Pro", price: "₱999/mo" },
+];
+
+export function PricingPage() {
+  async function subscribe(planId: string) {
+    const { checkoutUrl } = await authClient.paymongo.attach(planId, {
+      successUrl: `${window.location.origin}/billing/success`,
+      cancelUrl: `${window.location.origin}/pricing`,
+    });
+    window.location.href = checkoutUrl;
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {plans.map((plan) => (
+        <div key={plan.id} className="p-6 border rounded-lg">
+          <h3 className="text-xl font-bold">{plan.name}</h3>
+          <p className="text-2xl">{plan.price}</p>
+          <button onClick={() => subscribe(plan.id)}>
+            Subscribe
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+## 4. Check Feature Access
+
+```typescript
+const { allowed, balance, limit } = await authClient.paymongo.check("projects");
+
+if (!allowed) {
+  throw new Error("Upgrade required");
+}
+
+// Use the feature...
+await authClient.paymongo.track("projects");
+```
+
+<Card title="Next: Configuration" icon="arrow-right" href="/getting-started/configuration">
+  Learn about all configuration options
+</Card>

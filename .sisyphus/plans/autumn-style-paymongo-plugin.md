@@ -64,12 +64,12 @@ Replace the existing better-auth-paymongo plugin with an Autumn-style architectu
 - Complete replacement of existing implementation
 
 ### Definition of Done
-- [ ] `/attach` endpoint returns PayMongo checkout URL
-- [ ] `/check` endpoint returns `{ allowed, balance?, planId }` with 60s cache
-- [ ] `/track` endpoint decrements usage in local table
-- [ ] Client hooks reactively update on subscription changes
-- [ ] Period rollover works lazily without cron jobs
-- [ ] No webhook endpoints exist in the plugin
+- [x] `/attach` endpoint returns PayMongo checkout URL
+- [x] `/check` endpoint returns `{ allowed, balance?, planId }` with 60s cache
+- [x] `/track` endpoint decrements usage in local table
+- [x] Client hooks reactively update on subscription changes
+- [x] Period rollover works lazily without cron jobs
+- [x] No webhook endpoints exist in the plugin
 
 ### Must Have
 - Autumn-style three-endpoint API (`/attach`, `/check`, `/track`)
@@ -221,8 +221,8 @@ bun -e "import { type PaymongoAutumnConfig, type FeatureConfig, type PlanConfig 
 ```
 
 **Evidence to Capture:**
-- [ ] Build output showing no errors
-- [ ] Type file inspection
+- [x] Build output showing no errors
+- [x] Type file inspection
 
 **Commit**: YES
 - Message: `feat(types): define autumn-style type system`
@@ -279,8 +279,8 @@ console.log(JSON.stringify(Object.keys(plugin.schema || {})));
 ```
 
 **Evidence to Capture:**
-- [ ] Build output
-- [ ] Schema inspection showing paymongoUsage table
+- [x] Build output
+- [x] Schema inspection showing paymongoUsage table
 
 **Commit**: YES
 - Message: `feat(schema): add paymongoUsage table for metering`
@@ -354,8 +354,8 @@ sqlite3 ./dev.db "SELECT * FROM paymongo_usage ORDER BY created_at DESC LIMIT 1"
 ```
 
 **Evidence to Capture:**
-- [ ] curl response JSON
-- [ ] Database row verification
+- [x] curl response JSON
+- [x] Database row verification
 
 **Commit**: YES
 - Message: `feat(endpoints): implement /attach for checkout sessions`
@@ -422,7 +422,7 @@ console.log('Delete test:', deleted === null ? 'PASS' : 'FAIL');
 ```
 
 **Evidence to Capture:**
-- [ ] Test output showing PASS for all cache operations
+- [x] Test output showing PASS for all cache operations
 
 **Commit**: YES
 - Message: `feat(cache): add 60s TTL in-memory cache layer`
@@ -500,9 +500,9 @@ time curl -s http://localhost:3000/api/auth/paymongo/check?feature=api_calls \
 ```
 
 **Evidence to Capture:**
-- [ ] Metered feature response JSON
-- [ ] Boolean feature response JSON
-- [ ] Timing showing cache hit
+- [x] Metered feature response JSON
+- [x] Boolean feature response JSON
+- [x] Timing showing cache hit
 
 **Commit**: YES
 - Message: `feat(endpoints): implement /check with caching and period rollover`
@@ -573,8 +573,8 @@ curl -s -X POST http://localhost:3000/api/auth/paymongo/track \
 ```
 
 **Evidence to Capture:**
-- [ ] Track response JSON
-- [ ] Database balance verification
+- [x] Track response JSON
+- [x] Database balance verification
 
 **Commit**: YES
 - Message: `feat(endpoints): implement /track for usage metering`
@@ -634,8 +634,8 @@ console.log('track:', typeof client.track);
 ```
 
 **Evidence to Capture:**
-- [ ] Build output
-- [ ] Export verification
+- [x] Build output
+- [x] Export verification
 
 **Commit**: YES
 - Message: `feat(client): autumn-style client with attach/check/track actions`
@@ -698,8 +698,8 @@ console.log('useSubscription:', typeof useSubscription);
 ```
 
 **Evidence to Capture:**
-- [ ] Build output
-- [ ] Export verification
+- [x] Build output
+- [x] Export verification
 
 **Commit**: YES
 - Message: `feat(react): add useCheck and useSubscription hooks`
@@ -786,9 +786,9 @@ console.log('PASS: Integration test');
 ```
 
 **Evidence to Capture:**
-- [ ] Build output
-- [ ] Export verification
-- [ ] Integration smoke test output
+- [x] Build output
+- [x] Export verification
+- [x] Integration smoke test output
 
 **Commit**: YES
 - Message: `refactor: complete migration to autumn-style architecture`
@@ -833,12 +833,12 @@ curl -X POST http://localhost:3000/api/auth/paymongo/track -d '{}'
 ```
 
 ### Final Checklist
-- [ ] All 3 Autumn endpoints work (/attach, /check, /track)
-- [ ] Usage table created on DB init
-- [ ] 60s caching working (measurable speedup on /check)
-- [ ] Period rollover resets balance lazily
-- [ ] Client actions work (attach, check, track)
-- [ ] React hooks work (useCheck, useSubscription)
-- [ ] No old endpoints remain
-- [ ] No webhook code exists
-- [ ] Build passes with no errors
+- [x] All 3 Autumn endpoints work (/attach, /check, /track)
+- [x] Usage table created on DB init
+- [x] 60s caching working (measurable speedup on /check)
+- [x] Period rollover resets balance lazily
+- [x] Client actions work (attach, check, track)
+- [x] React hooks work (useCheck, useSubscription)
+- [x] No old endpoints remain
+- [x] No webhook code exists
+- [x] Build passes with no errors

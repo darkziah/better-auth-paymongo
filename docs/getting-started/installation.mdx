@@ -1,0 +1,62 @@
+---
+title: Installation
+description: Install better-auth-paymongo in your project
+---
+
+# Installation
+
+Install the package using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install better-auth-paymongo
+```
+
+```bash bun
+bun add better-auth-paymongo
+```
+
+```bash pnpm
+pnpm add better-auth-paymongo
+```
+
+```bash yarn
+yarn add better-auth-paymongo
+```
+</CodeGroup>
+
+## Peer Dependencies
+
+Make sure you have these peer dependencies installed:
+
+| Package | Version | Required |
+|---------|---------|----------|
+| `better-auth` | `>=1.0.0` | Yes |
+| `react` | `>=18` | Only for React hooks |
+| `zod` | `>=3` | Yes |
+
+## Database Migration
+
+Run your Better-Auth migration to create the `paymongoUsage` table:
+
+```bash
+npx better-auth migrate
+```
+
+This creates the following table:
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `entityType` | string | `"user"` or `"organization"` |
+| `entityId` | string | User or organization ID |
+| `featureId` | string | Feature being tracked |
+| `balance` | number | Remaining usage |
+| `limit` | number | Max usage per period |
+| `periodStart` | date | Billing cycle start |
+| `periodEnd` | date | Billing cycle end |
+| `planId` | string | Associated plan |
+| `checkoutSessionId` | string | PayMongo session ID |
+
+<Card title="Next: Quick Start" icon="arrow-right" href="/getting-started/quick-start">
+  Configure the plugin in your app
+</Card>

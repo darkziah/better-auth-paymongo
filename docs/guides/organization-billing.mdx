@@ -1,0 +1,137 @@
+---
+title: Organization Billing
+description: Seat-based billing for teams and organizations
+---
+
+# Organization Billing
+
+Integrate seat-based billing with Better-Auth's organization plugin.
+
+## Overview
+
+better-auth-paymongo provides helpers to automatically enforce seat limits based on your billing plans.
+
+## Setup
+
+```typescript server.ts
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { paymongo, createPaymongoOrganization } from "better-auth-paymongo";
+
+const paymongoConfig = {
+  secretKey: process.env.PAYMONGO_SECRET_KEY!,
+  features: {
+    seats: { type: "metered", limit: 5 },
+    projects: { type: "metered", limit: 10 },
+  },
+  plans: {
+    starter: {
+      amount: 49900,
+      currency: "PHP",
+      displayName: "Starter",
+      interval: "monthly",
+      features: { seats: 5, projects: 10 },
+    },
+    pro: {
+      amount: 99900,
+      currency: "PHP",
+      displayName: "Pro",
+      interval: "monthly",
+      features: { seats: 25, projects: 50 },
+    },
+  },
+};
+
+export const auth = betterAuth({
+  plugins: [
+    paymongo(paymongoConfig),
+    organization({
+      ...createPaymongoOrganization(paymongoConfig),
+    }),
+  ],
+});
+```
+
+## How It Works
+
+<Steps>
+  <Step title="Define seats as a metered feature">
+    Add `seats: { type: "metered", limit: 5 }` to your features
+  </Step>
+  <Step title="Set seat limits per plan">
+    Override the limit in each plan: `features: { seats: 25 }`
+  </Step>
+  <Step title="Spread the helper into organization config">
+    `createPaymongoOrganization()` returns a `membershipLimit` function
+  </Step>
+  <Step title="Better-Auth enforces the limit">
+    When adding members, the limit is automatically checked
+  </Step>
+</Steps>
+
+## API Reference
+
+### createPaymongoOrganization(config, seatConfig?)
+
+Returns configuration to spread into Better-Auth's organization plugin.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `config` | `PaymongoAutumnConfig` | Yes | Your paymongo config |
+| `seatConfig.featureId` | `string` | No | Feature ID (default: `"seats"`) |
+| `seatConfig.defaultLimit` | `number` | No | Default limit (default: `5`) |
+
+```typescript
+const orgConfig = createPaymongoOrganization(paymongoConfig, {
+  featureId: "team_members", // Use a different feature name
+  defaultLimit: 3,           // Default for orgs without a plan
+});
+```
+
+### getOrganizationSeats(adapter, orgId, featureId?)
+
+Get seat usage information for an organization.
+
+```typescript
+import { getOrganizationSeats } from "better-auth-paymongo";
+
+const { used, limit, remaining } = await getOrganizationSeats(
+  auth.adapter,
+  "org_123"
+);
+
+console.log(`${used}/${limit} seats used, ${remaining} remaining`);
+```
+
+**Returns:**
+```typescript
+{
+  used: number;      // Current member count
+  limit: number;     // Maximum allowed
+  remaining: number; // Seats available
+}
+```
+
+## Billing Per Organization
+
+When billing organizations instead of users, pass `organizationId` to the billing methods:
+
+```typescript
+// Attach a plan to an organization
+const { checkoutUrl } = await authClient.paymongo.attach("pro", {
+  successUrl: "/success",
+  cancelUrl: "/cancel",
+  organizationId: "org_123",
+});
+
+// Check organization features
+const { allowed } = await authClient.paymongo.check("projects", {
+  organizationId: "org_123",
+});
+
+// Track organization usage
+await authClient.paymongo.track("api_calls", {
+  organizationId: "org_123",
+  delta: 10,
+});
+```

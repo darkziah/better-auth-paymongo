@@ -1,0 +1,168 @@
+---
+title: React Hooks
+description: React hooks for billing UI with better-auth-paymongo
+---
+
+# React Hooks
+
+React hooks for building billing UI with real-time updates.
+
+## Setup
+
+```tsx app/providers.tsx
+import { AuthProvider } from "better-auth/react";
+import { authClient } from "@/lib/auth-client";
+
+export function Providers({ children }) {
+  return (
+    <AuthProvider client={authClient}>
+      {children}
+    </AuthProvider>
+  );
+}
+```
+
+## Hooks
+
+### useCheck(featureId, options?)
+
+Reactive hook to check feature access. Re-fetches when `refreshBilling()` is called.
+
+```tsx
+import { useCheck } from "better-auth-paymongo/react";
+
+function FeatureGate({ feature, children }) {
+  const { allowed, balance, limit, loading, error, refetch } = useCheck(feature);
+
+  if (loading) return <Spinner />;
+  if (error) return <Error message={error.message} />;
+  if (!allowed) return <UpgradePrompt />;
+
+  return (
+    <>
+      {children}
+      <UsageBar current={limit - balance} max={limit} />
+    </>
+  );
+}
+```
+
+**Return Type:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `allowed` | `boolean` | Whether access is allowed |
+| `balance` | `number \| undefined` | Remaining usage (metered) |
+| `limit` | `number \| undefined` | Max usage (metered) |
+| `planId` | `string \| undefined` | Current plan ID |
+| `loading` | `boolean` | Loading state |
+| `error` | `Error \| null` | Error if request failed |
+| `refetch` | `() => void` | Manually refetch |
+
+---
+
+### useSubscription()
+
+Get the current user's subscription info.
+
+```tsx
+import { useSubscription } from "better-auth-paymongo/react";
+
+function BillingStatus() {
+  const { planId, loading, error, refresh } = useSubscription();
+
+  if (loading) return <Spinner />;
+  if (!planId) return <FreeTierBadge />;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span>Plan: {planId}</span>
+      <button onClick={refresh}>Refresh</button>
+    </div>
+  );
+}
+```
+
+**Return Type:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `planId` | `string \| null` | Current plan ID |
+| `loading` | `boolean` | Loading state |
+| `error` | `Error \| null` | Error if failed |
+| `refresh` | `() => void` | Manually refresh |
+
+---
+
+### refreshBilling()
+
+Trigger a global refresh for all billing hooks. Call this after successful checkout.
+
+```tsx
+import { refreshBilling } from "better-auth-paymongo/react";
+import { useEffect } from "react";
+
+function CheckoutSuccessPage() {
+  useEffect(() => {
+    // Refresh all billing hooks after payment
+    refreshBilling();
+  }, []);
+
+  return (
+    <div className="text-center">
+      <h1>Payment successful!</h1>
+      <p>Your subscription is now active.</p>
+    </div>
+  );
+}
+```
+
+## Complete Example: Pricing Page
+
+```tsx components/pricing.tsx
+"use client";
+import { useSubscription, refreshBilling } from "better-auth-paymongo/react";
+import { authClient } from "@/lib/auth-client";
+
+const plans = [
+  { id: "starter", name: "Starter", price: "₱499/mo", features: ["10 projects", "1,000 API calls"] },
+  { id: "pro", name: "Pro", price: "₱999/mo", features: ["100 projects", "10,000 API calls", "Priority support"] },
+];
+
+export function PricingPage() {
+  const { planId, loading } = useSubscription();
+
+  async function subscribe(selectedPlanId: string) {
+    const { checkoutUrl } = await authClient.paymongo.attach(selectedPlanId, {
+      successUrl: `${window.location.origin}/billing/success`,
+      cancelUrl: `${window.location.origin}/pricing`,
+    });
+    window.location.href = checkoutUrl;
+  }
+
+  if (loading) return <div>Loading...</div>;
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+      {plans.map((plan) => (
+        <div key={plan.id} className="border rounded-xl p-6">
+          <h3 className="text-2xl font-bold">{plan.name}</h3>
+          <p className="text-3xl font-bold mt-2">{plan.price}</p>
+          <ul className="mt-4 space-y-2">
+            {plan.features.map((f) => (
+              <li key={f}>✓ {f}</li>
+            ))}
+          </ul>
+          <button
+            onClick={() => subscribe(plan.id)}
+            disabled={planId === plan.id}
+            className="mt-6 w-full py-2 px-4 bg-pink-500 text-white rounded-lg disabled:opacity-50"
+          >
+            {planId === plan.id ? "Current Plan" : "Subscribe"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+```

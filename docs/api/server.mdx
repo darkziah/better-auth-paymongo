@@ -1,0 +1,160 @@
+---
+title: Server Plugin
+description: API reference for the paymongo() server plugin
+---
+
+# Server Plugin
+
+The `paymongo()` plugin registers three HTTP endpoints under `/api/auth/paymongo/`.
+
+## Endpoints
+
+### POST /api/auth/paymongo/attach
+
+Creates a PayMongo checkout session and initializes usage records.
+
+<ParamField body="planId" type="string" required>
+  The plan ID from your configuration
+</ParamField>
+
+<ParamField body="successUrl" type="string" required>
+  Redirect URL after successful payment
+</ParamField>
+
+<ParamField body="cancelUrl" type="string" required>
+  Redirect URL if user cancels
+</ParamField>
+
+<ParamField body="organizationId" type="string">
+  For organization billing (optional)
+</ParamField>
+
+<ResponseField name="checkoutUrl" type="string">
+  The PayMongo checkout URL to redirect the user to
+</ResponseField>
+
+<ResponseField name="sessionId" type="string">
+  The PayMongo checkout session ID
+</ResponseField>
+
+```bash Example Request
+curl -X POST /api/auth/paymongo/attach \
+  -H "Content-Type: application/json" \
+  -d '{
+    "planId": "pro",
+    "successUrl": "https://example.com/success",
+    "cancelUrl": "https://example.com/cancel"
+  }'
+```
+
+```json Response
+{
+  "checkoutUrl": "https://checkout.paymongo.com/cs_xxx",
+  "sessionId": "cs_xxx"
+}
+```
+
+---
+
+### GET /api/auth/paymongo/check
+
+Checks if a feature is accessible. Verifies payment status (cached 60s) and handles period rollover.
+
+<ParamField query="feature" type="string" required>
+  The feature ID to check
+</ParamField>
+
+<ParamField query="organizationId" type="string">
+  For organization billing (optional)
+</ParamField>
+
+<ResponseField name="allowed" type="boolean">
+  Whether access is allowed
+</ResponseField>
+
+<ResponseField name="balance" type="number">
+  Remaining usage (for metered features)
+</ResponseField>
+
+<ResponseField name="limit" type="number">
+  Maximum usage (for metered features)
+</ResponseField>
+
+<ResponseField name="planId" type="string">
+  The user's current plan ID
+</ResponseField>
+
+```bash Example Request
+curl -X GET "/api/auth/paymongo/check?feature=projects"
+```
+
+```json Response
+{
+  "allowed": true,
+  "balance": 95,
+  "limit": 100,
+  "planId": "pro"
+}
+```
+
+---
+
+### POST /api/auth/paymongo/track
+
+Decrements the usage balance for a metered feature.
+
+<ParamField body="feature" type="string" required>
+  The feature ID to track
+</ParamField>
+
+<ParamField body="delta" type="number" default="1">
+  Amount to decrement (default: 1)
+</ParamField>
+
+<ParamField body="organizationId" type="string">
+  For organization billing (optional)
+</ParamField>
+
+<ResponseField name="success" type="boolean">
+  Whether the operation succeeded
+</ResponseField>
+
+<ResponseField name="balance" type="number">
+  Updated remaining balance
+</ResponseField>
+
+<ResponseField name="limit" type="number">
+  Maximum limit
+</ResponseField>
+
+```bash Example Request
+curl -X POST /api/auth/paymongo/track \
+  -H "Content-Type: application/json" \
+  -d '{"feature": "projects"}'
+```
+
+```json Response
+{
+  "success": true,
+  "balance": 94,
+  "limit": 100
+}
+```
+
+## Error Responses
+
+```json 401 Unauthorized
+{ "error": "Unauthorized" }
+```
+
+```json 400 Bad Request
+{ "error": "Missing required field: planId" }
+```
+
+```json 403 Forbidden (Limit Exceeded)
+{
+  "allowed": false,
+  "balance": 0,
+  "limit": 100
+}
+```

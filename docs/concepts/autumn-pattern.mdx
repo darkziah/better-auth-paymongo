@@ -1,0 +1,111 @@
+---
+title: The Autumn Pattern
+description: No-webhook billing architecture explained
+---
+
+# The Autumn Pattern
+
+The Autumn pattern is a billing architecture where PayMongo is the **source of truth** for payments, but you don't rely on webhooks.
+
+## Why "Autumn"?
+
+Named after the [Autumn billing service](https://useautumn.com) that pioneered this pattern. Instead of waiting for webhook notifications, payment status is verified **on-demand** when users access features.
+
+## How It Works
+
+<Steps>
+  <Step title="Attach">
+    Create a PayMongo checkout session and redirect the user
+  </Step>
+  <Step title="User Pays">
+    User completes payment on PayMongo's hosted checkout
+  </Step>
+  <Step title="Redirect">
+    User returns to your success URL
+  </Step>
+  <Step title="Check">
+    On feature access, verify payment status via PayMongo API
+  </Step>
+  <Step title="Track">
+    Decrement usage for metered features
+  </Step>
+</Steps>
+
+## Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         YOUR APP                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1. User clicks "Subscribe"                                 │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌─────────────┐                                           │
+│  │ POST /attach │ ──────────► Create checkout session      │
+│  └─────────────┘              Store in paymongoUsage       │
+│         │                                                   │
+│         ▼                                                   │
+│  Redirect to PayMongo ────────────────────────────────┐    │
+│                                                        │    │
+│  ┌─────────────────────────────────────────────────┐  │    │
+│  │              PAYMONGO CHECKOUT                   │  │    │
+│  │                                                  │  │    │
+│  │  User enters payment details and completes      │◄─┘    │
+│  │                                                  │       │
+│  └─────────────────────────────────────────────────┘       │
+│         │                                                   │
+│         ▼                                                   │
+│  Redirect to success URL ◄──────────────────────────       │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌────────────┐                                            │
+│  │ GET /check │ ──────────► Verify payment via API         │
+│  └────────────┘              (60s cache)                   │
+│         │                                                   │
+│         ▼                                                   │
+│  Access granted ✓                                          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="No Webhooks" icon="webhook">
+    No public endpoints needed. No webhook signature verification. Simpler infrastructure.
+  </Card>
+  <Card title="Always Accurate" icon="check-circle">
+    Payment status is checked at access time, not when a webhook arrives.
+  </Card>
+  <Card title="Graceful Degradation" icon="shield">
+    If PayMongo is temporarily down, cached status is used.
+  </Card>
+  <Card title="60-Second Cache" icon="clock">
+    Reduces API calls while staying current. Balance between freshness and performance.
+  </Card>
+</CardGroup>
+
+## Period Rollover
+
+Billing periods reset automatically when you call `/check`:
+
+1. If `periodEnd < now`, the balance resets to the plan limit
+2. New period starts from the current date
+3. `periodEnd` is set based on the plan interval (monthly/yearly)
+
+This means you don't need cron jobs or scheduled tasks. The reset happens lazily when the user accesses a feature.
+
+## Trade-offs
+
+<Warning>
+  The Autumn pattern works best for subscription-based billing. For usage-based billing with real-time metering, webhooks may still be needed.
+</Warning>
+
+| Aspect | Autumn Pattern | Webhook Pattern |
+|--------|----------------|-----------------|
+| Infrastructure | Simpler | More complex |
+| Latency | Slightly higher (API call) | Lower (pre-fetched) |
+| Reliability | Self-healing | Depends on webhook delivery |
+| Real-time | On-demand | Event-driven |
+| Best for | Subscriptions, feature flags | Usage-based, real-time billing |

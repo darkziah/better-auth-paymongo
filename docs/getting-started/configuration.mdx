@@ -1,0 +1,161 @@
+---
+title: Configuration
+description: Complete configuration reference for better-auth-paymongo
+---
+
+# Configuration
+
+## PaymongoAutumnConfig
+
+The main configuration object for the server plugin:
+
+```typescript
+paymongo({
+  secretKey: string;
+  features: Record<string, FeatureConfig>;
+  plans: Record<string, PlanConfig>;
+  scopes?: Array<'user' | 'organization'>;
+})
+```
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `secretKey` | `string` | Yes | Your PayMongo secret key (starts with `sk_`) |
+| `features` | `Record<string, FeatureConfig>` | Yes | Feature definitions |
+| `plans` | `Record<string, PlanConfig>` | Yes | Plan definitions |
+| `scopes` | `Array<'user' \| 'organization'>` | No | Billing scopes (default: `['user']`) |
+
+## FeatureConfig
+
+Features can be either **boolean** (access control) or **metered** (usage-limited):
+
+<Tabs>
+  <Tab title="Boolean">
+    ```typescript
+    {
+      api_access: { type: "boolean" },
+      export_pdf: { type: "boolean" },
+      priority_support: { type: "boolean" },
+    }
+    ```
+    Boolean features are simple on/off switches. Either the plan includes the feature or it doesn't.
+  </Tab>
+  <Tab title="Metered">
+    ```typescript
+    {
+      projects: { type: "metered", limit: 5 },
+      api_calls: { type: "metered", limit: 1000 },
+      seats: { type: "metered", limit: 3 },
+    }
+    ```
+    Metered features have a usage balance that decrements when tracked. The `limit` is the default for users without a plan.
+  </Tab>
+</Tabs>
+
+## PlanConfig
+
+Each plan defines pricing and feature overrides:
+
+```typescript
+{
+  pro: {
+    amount: 99900,           // Price in centavos (₱999.00)
+    currency: "PHP",         // Currency code
+    displayName: "Pro Plan", // Human-readable name
+    interval: "monthly",     // "monthly" or "yearly"
+    features: {
+      projects: 100,         // Override metered limit
+      api_access: true,      // Enable boolean feature
+      export_pdf: true,
+    },
+  },
+}
+```
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `amount` | `number` | Yes | Price in centavos |
+| `currency` | `string` | Yes | ISO 4217 currency code |
+| `displayName` | `string` | Yes | Human-readable plan name |
+| `interval` | `"monthly" \| "yearly"` | Yes | Billing interval |
+| `features` | `Record<string, number \| boolean>` | Yes | Feature overrides |
+
+## Environment Variables
+
+```bash .env
+PAYMONGO_SECRET_KEY=sk_test_...
+```
+
+<Warning>
+  Never expose your secret key in client-side code. Only use it on the server.
+</Warning>
+
+## Full Example
+
+```typescript
+import { betterAuth } from "better-auth";
+import { paymongo } from "better-auth-paymongo";
+
+export const auth = betterAuth({
+  plugins: [
+    paymongo({
+      secretKey: process.env.PAYMONGO_SECRET_KEY!,
+      scopes: ["user", "organization"],
+      features: {
+        // Metered features
+        projects: { type: "metered", limit: 3 },
+        api_calls: { type: "metered", limit: 100 },
+        seats: { type: "metered", limit: 1 },
+        // Boolean features
+        api_access: { type: "boolean" },
+        export_pdf: { type: "boolean" },
+        priority_support: { type: "boolean" },
+      },
+      plans: {
+        free: {
+          amount: 0,
+          currency: "PHP",
+          displayName: "Free",
+          interval: "monthly",
+          features: {
+            projects: 3,
+            api_calls: 100,
+            seats: 1,
+            api_access: false,
+            export_pdf: false,
+            priority_support: false,
+          },
+        },
+        starter: {
+          amount: 49900,
+          currency: "PHP",
+          displayName: "Starter",
+          interval: "monthly",
+          features: {
+            projects: 10,
+            api_calls: 1000,
+            seats: 5,
+            api_access: true,
+            export_pdf: false,
+            priority_support: false,
+          },
+        },
+        pro: {
+          amount: 99900,
+          currency: "PHP",
+          displayName: "Pro",
+          interval: "monthly",
+          features: {
+            projects: 100,
+            api_calls: 10000,
+            seats: 25,
+            api_access: true,
+            export_pdf: true,
+            priority_support: true,
+          },
+        },
+      },
+    }),
+  ],
+});
+```

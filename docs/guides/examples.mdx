@@ -1,0 +1,217 @@
+---
+title: Examples
+description: Practical examples for common billing patterns
+---
+
+# Examples
+
+Real-world examples for implementing billing in your application.
+
+## Pricing Page
+
+A complete pricing page with plan selection:
+
+```tsx components/pricing.tsx
+"use client";
+import { useSubscription } from "better-auth-paymongo/react";
+import { authClient } from "@/lib/auth-client";
+
+const plans = [
+  {
+    id: "starter",
+    name: "Starter",
+    price: "₱499",
+    period: "/month",
+    features: ["10 projects", "1,000 API calls", "5 team members"],
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    price: "₱999",
+    period: "/month",
+    popular: true,
+    features: ["100 projects", "10,000 API calls", "25 team members", "Priority support"],
+  },
+];
+
+export function PricingPage() {
+  const { planId, loading } = useSubscription();
+
+  async function subscribe(selectedPlanId: string) {
+    const { checkoutUrl } = await authClient.paymongo.attach(selectedPlanId, {
+      successUrl: `${window.location.origin}/billing/success`,
+      cancelUrl: `${window.location.origin}/pricing`,
+    });
+    window.location.href = checkoutUrl;
+  }
+
+  return (
+    <div className="py-12">
+      <h1 className="text-4xl font-bold text-center mb-12">Pricing</h1>
+      <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto px-4">
+        {plans.map((plan) => (
+          <div
+            key={plan.id}
+            className={`rounded-2xl border p-8 ${
+              plan.popular ? "border-pink-500 ring-2 ring-pink-500" : ""
+            }`}
+          >
+            {plan.popular && (
+              <span className="bg-pink-500 text-white text-sm px-3 py-1 rounded-full">
+                Popular
+              </span>
+            )}
+            <h2 className="text-2xl font-bold mt-4">{plan.name}</h2>
+            <p className="mt-2">
+              <span className="text-4xl font-bold">{plan.price}</span>
+              <span className="text-gray-500">{plan.period}</span>
+            </p>
+            <ul className="mt-6 space-y-3">
+              {plan.features.map((feature) => (
+                <li key={feature} className="flex items-center gap-2">
+                  <span className="text-green-500">✓</span>
+                  {feature}
+                </li>
+              ))}
+            </ul>
+            <button
+              onClick={() => subscribe(plan.id)}
+              disabled={loading || planId === plan.id}
+              className="mt-8 w-full py-3 rounded-lg font-semibold bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-50"
+            >
+              {planId === plan.id ? "Current Plan" : "Get Started"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+## Usage Dashboard
+
+Display current usage for all metered features:
+
+```tsx components/usage-dashboard.tsx
+"use client";
+import { useCheck } from "better-auth-paymongo/react";
+
+function UsageCard({ title, featureId }: { title: string; featureId: string }) {
+  const { balance, limit, loading } = useCheck(featureId);
+
+  if (loading) return <div className="animate-pulse h-24 bg-gray-100 rounded-lg" />;
+
+  const used = (limit || 0) - (balance || 0);
+  const percentage = limit ? (used / limit) * 100 : 0;
+
+  return (
+    <div className="p-6 border rounded-lg">
+      <h3 className="font-semibold text-gray-600">{title}</h3>
+      <p className="text-2xl font-bold mt-1">
+        {used} / {limit}
+      </p>
+      <div className="mt-3 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full ${
+            percentage > 80 ? "bg-red-500" : "bg-pink-500"
+          }`}
+          style={{ width: `${Math.min(percentage, 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function UsageDashboard() {
+  return (
+    <div className="grid md:grid-cols-3 gap-6">
+      <UsageCard title="Projects" featureId="projects" />
+      <UsageCard title="API Calls" featureId="api_calls" />
+      <UsageCard title="Team Members" featureId="seats" />
+    </div>
+  );
+}
+```
+
+## Protecting API Routes
+
+Check feature access on the server before processing requests:
+
+```typescript app/api/projects/route.ts
+import { auth } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  // 1. Verify authentication
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // 2. Check feature access
+  const check = await auth.api.paymongo.check({
+    headers: req.headers,
+    query: { feature: "projects" },
+  });
+
+  if (!check.allowed || check.balance === 0) {
+    return NextResponse.json(
+      { error: "Project limit reached. Please upgrade your plan." },
+      { status: 403 }
+    );
+  }
+
+  // 3. Process the request
+  const body = await req.json();
+  const project = await db.projects.create({ name: body.name });
+
+  // 4. Track usage
+  await auth.api.paymongo.track({
+    headers: req.headers,
+    body: { feature: "projects" },
+  });
+
+  return NextResponse.json(project);
+}
+```
+
+## Feature Gate Component
+
+A reusable component to gate features based on plan:
+
+```tsx components/feature-gate.tsx
+"use client";
+import { useCheck } from "better-auth-paymongo/react";
+import { ReactNode } from "react";
+
+interface FeatureGateProps {
+  feature: string;
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+export function FeatureGate({ feature, children, fallback }: FeatureGateProps) {
+  const { allowed, loading } = useCheck(feature);
+
+  if (loading) return null;
+  
+  if (!allowed) {
+    return fallback || (
+      <div className="p-4 bg-gray-100 rounded-lg text-center">
+        <p className="text-gray-600">This feature requires an upgrade.</p>
+        <a href="/pricing" className="text-pink-500 font-semibold">
+          View Plans →
+        </a>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+// Usage:
+// <FeatureGate feature="api_access">
+//   <ApiKeyManager />
+// </FeatureGate>
+```

@@ -1,0 +1,136 @@
+---
+title: Client SDK
+description: API reference for the paymongoClient() browser SDK
+---
+
+# Client SDK
+
+The client SDK provides typed methods for interacting with the PayMongo billing endpoints.
+
+## Setup
+
+```typescript lib/auth-client.ts
+import { createAuthClient } from "better-auth/client";
+import { paymongoClient } from "better-auth-paymongo/client";
+
+export const authClient = createAuthClient({
+  plugins: [paymongoClient()],
+});
+```
+
+## Methods
+
+### attach(planId, options)
+
+Creates a checkout session and returns the URL to redirect to.
+
+<ParamField body="planId" type="string" required>
+  The plan ID from your configuration
+</ParamField>
+
+<ParamField body="options.successUrl" type="string" required>
+  Redirect URL after successful payment
+</ParamField>
+
+<ParamField body="options.cancelUrl" type="string" required>
+  Redirect URL if user cancels
+</ParamField>
+
+<ParamField body="options.organizationId" type="string">
+  For organization billing
+</ParamField>
+
+```typescript
+const { checkoutUrl, sessionId } = await authClient.paymongo.attach("pro", {
+  successUrl: `${window.location.origin}/billing/success`,
+  cancelUrl: `${window.location.origin}/pricing`,
+});
+
+// Redirect to PayMongo checkout
+window.location.href = checkoutUrl;
+```
+
+**Returns:** `Promise<{ checkoutUrl: string; sessionId: string }>`
+
+---
+
+### check(featureId, options?)
+
+Checks if a feature is accessible.
+
+<ParamField body="featureId" type="string" required>
+  The feature ID to check
+</ParamField>
+
+<ParamField body="options.organizationId" type="string">
+  For organization billing
+</ParamField>
+
+```typescript
+const result = await authClient.paymongo.check("projects");
+
+if (result.allowed) {
+  console.log(`Balance: ${result.balance}/${result.limit}`);
+} else {
+  console.log("Upgrade required");
+}
+```
+
+**Returns:**
+```typescript
+Promise<{
+  allowed: boolean;
+  balance?: number;
+  limit?: number;
+  planId?: string;
+}>
+```
+
+---
+
+### track(featureId, options?)
+
+Decrements usage for a metered feature.
+
+<ParamField body="featureId" type="string" required>
+  The feature ID to track
+</ParamField>
+
+<ParamField body="options.delta" type="number" default="1">
+  Amount to decrement
+</ParamField>
+
+<ParamField body="options.organizationId" type="string">
+  For organization billing
+</ParamField>
+
+```typescript
+const result = await authClient.paymongo.track("api_calls", {
+  delta: 5, // Track 5 API calls at once
+});
+
+console.log(`Remaining: ${result.balance}/${result.limit}`);
+```
+
+**Returns:** `Promise<{ success: boolean; balance: number; limit: number }>`
+
+## Complete Example
+
+```typescript
+async function createProject(name: string) {
+  // 1. Check if user can create projects
+  const { allowed, balance } = await authClient.paymongo.check("projects");
+  
+  if (!allowed || balance === 0) {
+    throw new Error("Project limit reached. Please upgrade your plan.");
+  }
+  
+  // 2. Create the project
+  const project = await api.createProject({ name });
+  
+  // 3. Track the usage
+  await authClient.paymongo.track("projects");
+  
+  return project;
+}
+```

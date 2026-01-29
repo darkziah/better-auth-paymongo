@@ -1,0 +1,80 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "better-auth-paymongo",
+  "logo": {
+    "dark": "/images/logo-dark.svg",
+    "light": "/images/logo-light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#ff73a8",
+    "light": "#ff99bf",
+    "dark": "#e91e8c",
+    "anchors": {
+      "from": "#ff73a8",
+      "to": "#db2777"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/darkziah/better-auth-paymongo"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get Started",
+    "url": "/getting-started/installation"
+  },
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/darkziah/better-auth-paymongo"
+    },
+    {
+      "name": "NPM",
+      "icon": "npm",
+      "url": "https://www.npmjs.com/package/better-auth-paymongo"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Overview",
+      "pages": ["introduction"]
+    },
+    {
+      "group": "Getting Started",
+      "pages": [
+        "getting-started/installation",
+        "getting-started/quick-start",
+        "getting-started/configuration"
+      ]
+    },
+    {
+      "group": "API Reference",
+      "pages": [
+        "api/server",
+        "api/client",
+        "api/react"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/organization-billing",
+        "guides/examples"
+      ]
+    },
+    {
+      "group": "Concepts",
+      "pages": [
+        "concepts/autumn-pattern",
+        "concepts/feature-types"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/darkziah/better-auth-paymongo"
+  },
+  "backgroundImage": "/images/background.png"
+}

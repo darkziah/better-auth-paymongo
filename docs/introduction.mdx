@@ -1,0 +1,59 @@
+---
+title: Introduction
+description: PayMongo payment gateway plugin for Better-Auth with feature-based billing and usage metering
+---
+
+# better-auth-paymongo
+
+A PayMongo payment plugin for [Better-Auth](https://better-auth.com) using the **Autumn billing pattern** — no webhooks required.
+
+<CardGroup cols={2}>
+  <Card title="Feature-Based Billing" icon="puzzle-piece">
+    Define boolean (access) and metered (usage) features per plan
+  </Card>
+  <Card title="No Webhooks Required" icon="rocket">
+    Verify payments on-demand using the Autumn pattern
+  </Card>
+  <Card title="Organization Support" icon="users">
+    Built-in seat-based billing for teams
+  </Card>
+  <Card title="React Hooks" icon="react">
+    Ready-to-use hooks for billing UI
+  </Card>
+</CardGroup>
+
+## Quick Install
+
+<CodeGroup>
+```bash npm
+npm install better-auth-paymongo
+```
+
+```bash bun
+bun add better-auth-paymongo
+```
+
+```bash pnpm
+pnpm add better-auth-paymongo
+```
+</CodeGroup>
+
+## How It Works
+
+The Autumn pattern is a no-webhook billing architecture:
+
+<Steps>
+  <Step title="Attach">
+    Create a checkout session and redirect user to PayMongo
+  </Step>
+  <Step title="Check">
+    When user accesses a feature, verify payment status via API
+  </Step>
+  <Step title="Track">
+    Decrement usage for metered features
+  </Step>
+</Steps>
+
+<Card title="Get Started" icon="arrow-right" href="/getting-started/installation">
+  Set up better-auth-paymongo in your project
+</Card>
