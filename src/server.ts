@@ -73,6 +73,34 @@ export const paymongo = <
                     },
                 },
             },
+            paymongoSession: {
+                fields: {
+                    sessionId: {
+                        type: "string",
+                        required: true,
+                    },
+                    entityType: {
+                        type: "string",
+                        required: true,
+                    },
+                    entityId: {
+                        type: "string",
+                        required: true,
+                    },
+                    planId: {
+                        type: "string",
+                        required: true,
+                    },
+                    status: {
+                        type: "string",
+                        required: true,
+                    },
+                    createdAt: {
+                        type: "date",
+                        required: true,
+                    },
+                },
+            },
         },
         endpoints: {
             attach: createAuthEndpoint(
@@ -191,15 +219,19 @@ export const paymongo = <
                     const entityType = organizationId ? 'organization' : 'user';
                     const entityId = organizationId || user.id;
 
-                    const existing = await ctx.context.adapter.findMany({
+                    const existingRecords = await ctx.context.adapter.findMany({
                         model: 'paymongoUsage',
                         where: [
                             { field: 'entityType', value: entityType },
                             { field: 'entityId', value: entityId }
                         ]
-                    }) as Array<{ id: string }>;
+                    }) as Array<{ id: string; featureId: string; balance: number; limit: number }>;
 
-                    for (const record of existing) {
+                    const usageByFeature = new Map<string, { consumed: number }>();
+                    for (const record of existingRecords) {
+                        const consumed = record.limit - record.balance;
+                        usageByFeature.set(record.featureId, { consumed });
+                        
                         await ctx.context.adapter.delete({
                             model: 'paymongoUsage',
                             where: [{ field: 'id', value: record.id }]
@@ -216,7 +248,10 @@ export const paymongo = <
                         const featureConfig = config.features[featureId];
                         
                         if (featureConfig && featureConfig.type === 'metered') {
-                            const limit = typeof featureValue === 'number' ? featureValue : featureConfig.limit;
+                            const newLimit = typeof featureValue === 'number' ? featureValue : featureConfig.limit;
+                            const previousUsage = usageByFeature.get(featureId);
+                            const consumed = previousUsage?.consumed ?? 0;
+                            const newBalance = Math.max(0, newLimit - consumed);
                             
                             await ctx.context.adapter.create({
                                 model: 'paymongoUsage',
@@ -224,8 +259,8 @@ export const paymongo = <
                                     entityType,
                                     entityId,
                                     featureId,
-                                    balance: limit,
-                                    limit,
+                                    balance: newBalance,
+                                    limit: newLimit,
                                     periodStart: now,
                                     periodEnd,
                                     planId,
