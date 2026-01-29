@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "better-auth";
 import type { PaymongoAutumnConfig, AttachResponse, CheckResponse, UsageRecord } from "./types";
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { cache } from "./cache";
+import { z } from "zod";
 
 export const paymongo = <
     TPlans extends Record<string, any>,
@@ -78,18 +79,17 @@ export const paymongo = <
                 '/paymongo/attach',
                 {
                     method: 'POST',
-                    use: [sessionMiddleware]
+                    use: [sessionMiddleware],
+                    body: z.object({
+                        planId: z.string(),
+                        successUrl: z.string(),
+                        cancelUrl: z.string(),
+                        organizationId: z.string().optional(),
+                    }),
                 },
                 async (ctx) => {
                     const user = ctx.context.session.user;
-                    const body = ctx.body as {
-                        planId: string;
-                        successUrl: string;
-                        cancelUrl: string;
-                        organizationId?: string;
-                    };
-
-                    const { planId, successUrl, cancelUrl, organizationId } = body;
+                    const { planId, successUrl, cancelUrl, organizationId } = ctx.body;
 
                     const plan = config.plans[planId];
                     if (!plan) {
@@ -173,20 +173,15 @@ export const paymongo = <
                 '/paymongo/check',
                 {
                     method: 'GET',
-                    use: [sessionMiddleware]
+                    use: [sessionMiddleware],
+                    query: z.object({
+                        feature: z.string(),
+                        organizationId: z.string().optional(),
+                    }),
                 },
                 async (ctx) => {
                     const user = ctx.context.session.user;
-                    const query = ctx.query as {
-                        feature: string;
-                        organizationId?: string;
-                    };
-
-                    const { feature: featureId, organizationId } = query;
-
-                    if (!featureId) {
-                        throw new Error('Missing required query param: feature');
-                    }
+                    const { feature: featureId, organizationId } = ctx.query;
 
                     const entityType = organizationId ? 'organization' : 'user';
                     const entityId = organizationId || user.id;
@@ -270,15 +265,16 @@ export const paymongo = <
                 '/paymongo/track',
                 {
                     method: 'POST',
-                    use: [sessionMiddleware]
+                    use: [sessionMiddleware],
+                    body: z.object({
+                        feature: z.string(),
+                        delta: z.number().optional().default(1),
+                        organizationId: z.string().optional(),
+                    }),
                 },
                 async (ctx) => {
                     const user = ctx.context.session.user;
-                    const { feature, delta = 1, organizationId } = ctx.body as {
-                        feature: string;
-                        delta?: number;
-                        organizationId?: string;
-                    };
+                    const { feature, delta, organizationId } = ctx.body;
 
                     const entityType = organizationId ? 'organization' : 'user';
                     const entityId = organizationId || user.id;

@@ -9,14 +9,17 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./client": {
       "import": "./dist/client.js",
+      "require": "./dist/client.js",
       "types": "./dist/client.d.ts"
     },
     "./react": {
       "import": "./dist/react.js",
+      "require": "./dist/react.js",
       "types": "./dist/react.d.ts"
     }
   },
