@@ -1,153 +1,98 @@
-/**
- * React utilities for better-auth-paymongo
- * 
- * When using better-auth's React client (createAuthClient from "better-auth/react"),
- * hooks are automatically generated from the plugin's getAtoms():
- * 
- * - client.useConfig() - Returns the config (plans and addons)
- * - client.useSubscription() - Returns the current subscription
- * 
- * This module exports helper functions to compute limits and extract
- * useful data from the hook results.
- */
-
-import type { SubscriptionData, BasePlanConfig, BaseAddonConfig } from "./types";
-import type { PaymongoConfig } from "./client";
-
-// Re-export types for convenience
-export type { PaymongoConfig } from "./client";
-export type { SubscriptionData, BasePlanConfig, BaseAddonConfig } from "./types";
-
-// =============================================================================
-// Type for useConfig/useSubscription hook results (from better-auth)
-// =============================================================================
-
-export interface AuthQueryResult<T> {
-  data: T | null;
-  error: { message: string } | null;
-  isPending: boolean;
-  isRefetching: boolean;
-  refetch: (queryParams?: { query?: Record<string, string> }) => Promise<void>;
-}
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
+import { atom } from 'nanostores';
+import { useStore } from '@nanostores/react';
+import { useEffect, useState, useCallback } from 'react';
+import type { CheckResponse } from './types';
 
 /**
- * Compute limits by merging base plan limits with add-on bonuses
+ * Atom to trigger re-fetches across hooks
  */
-export function computeLimits(
-  subscription: SubscriptionData | null,
-  plans: Record<string, BasePlanConfig>,
-  addons?: Record<string, BaseAddonConfig>
-): Record<string, number> {
-  if (!subscription) return {};
+export const $refreshTrigger = atom(0);
 
-  const plan = plans[subscription.planId];
-  if (!plan) return {};
+/**
+ * Hook to check feature permissions
+ */
+export function useCheck(
+  featureId: string,
+  options?: { organizationId?: string }
+) {
+  const [state, setState] = useState<{
+    data: CheckResponse | null;
+    loading: boolean;
+    error: Error | null;
+  }>({ data: null, loading: true, error: null });
 
-  const limits = { ...plan.limits };
+  const trigger = useStore($refreshTrigger);
 
-  if (addons && subscription.addons) {
-    for (const [addonId, qty] of Object.entries(subscription.addons)) {
-      const addon = addons[addonId];
-      if (addon?.limitBonuses) {
-        for (const [key, bonus] of Object.entries(addon.limitBonuses)) {
-          limits[key] = (limits[key] || 0) + bonus * qty;
-        }
+  const fetchCheck = useCallback(async () => {
+    setState(s => ({ ...s, loading: true, error: null }));
+    try {
+      const params = new URLSearchParams({ feature: featureId });
+      if (options?.organizationId) {
+        params.set('organizationId', options.organizationId);
       }
+      const res = await fetch(`/api/auth/paymongo/check?${params}`);
+      if (!res.ok) throw new Error('Check failed');
+      const data: CheckResponse = await res.json();
+      setState({ data, loading: false, error: null });
+    } catch (e) {
+      setState({ data: null, loading: false, error: e as Error });
     }
-  }
+  }, [featureId, options?.organizationId]);
 
-  return limits;
-}
-
-/**
- * Extract the current plan from config and subscription data
- */
-export function getCurrentPlan(
-  config: PaymongoConfig | null,
-  subscription: SubscriptionData | null
-): BasePlanConfig | null {
-  if (!config || !subscription) return null;
-  return config.plans[subscription.planId] ?? null;
-}
-
-/**
- * Check if a subscription is active (active or trialing)
- */
-export function isSubscriptionActive(subscription: SubscriptionData | null): boolean {
-  return subscription?.status === "active" || subscription?.status === "trialing";
-}
-
-/**
- * Get trial status information
- */
-export function getTrialStatus(subscription: SubscriptionData | null): {
-  isTrialing: boolean;
-  trialEndsAt: Date | null;
-  daysRemaining: number;
-  hasUsedTrial: boolean;
-} {
-  const isTrialing = subscription?.status === "trialing";
-  let trialEndsAt: Date | null = null;
-  let daysRemaining = 0;
-
-  if (subscription?.trialEndsAt) {
-    trialEndsAt = new Date(subscription.trialEndsAt);
-    const now = new Date();
-    const msRemaining = trialEndsAt.getTime() - now.getTime();
-    daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
-  }
+  useEffect(() => {
+    fetchCheck();
+  }, [fetchCheck, trigger]);
 
   return {
-    isTrialing,
-    trialEndsAt,
-    daysRemaining,
-    hasUsedTrial: !!subscription?.trialUsedAt
+    allowed: state.data?.allowed ?? false,
+    balance: state.data?.balance,
+    limit: state.data?.limit,
+    planId: state.data?.planId,
+    loading: state.loading,
+    error: state.error,
+    refetch: fetchCheck
   };
 }
 
 /**
- * Get usage information for a specific limit
+ * Hook to get current subscription state
  */
-export function getUsageInfo(
-  limitKey: string,
-  subscription: SubscriptionData | null,
-  config: PaymongoConfig | null,
-  includeAddons: boolean = true
-): {
-  usage: number;
-  limit: number;
-  remaining: number;
-  isOverLimit: boolean;
-} {
-  const usage = subscription?.usage?.[limitKey] ?? 0;
-  let limit = 0;
+export function useSubscription() {
+  const [state, setState] = useState<{
+    planId: string | null;
+    loading: boolean;
+    error: Error | null;
+  }>({ planId: null, loading: true, error: null });
 
-  if (subscription?.planId && config?.plans[subscription.planId]) {
-    const computedLimits = includeAddons
-      ? computeLimits(subscription, config.plans, config.addons)
-      : (config.plans[subscription.planId]?.limits ?? {});
-    limit = computedLimits[limitKey] ?? 0;
-  }
+  const trigger = useStore($refreshTrigger);
 
-  const remaining = Math.max(0, limit - usage);
-  const isOverLimit = usage >= limit && limit > 0;
+  const refresh = useCallback(async () => {
+    setState(s => ({ ...s, loading: true, error: null }));
+    try {
+      const res = await fetch('/api/auth/paymongo/check?feature=_subscription');
+      if (!res.ok) throw new Error('Failed to get subscription');
+      const data: CheckResponse = await res.json();
+      setState({ planId: data.planId ?? null, loading: false, error: null });
+    } catch (e) {
+      setState({ planId: null, loading: false, error: e as Error });
+    }
+  }, []);
 
-  return { usage, limit, remaining, isOverLimit };
+  useEffect(() => {
+    refresh();
+  }, [refresh, trigger]);
+
+  return {
+    planId: state.planId,
+    loading: state.loading,
+    error: state.error,
+    refresh
+  };
 }
 
 /**
- * Format price amount for display
- * @param amount Amount in smallest currency unit (e.g., centavos)
- * @param currency Currency code (e.g., "PHP")
+ * Trigger global refresh for all hooks
  */
-export function formatPrice(amount: number, currency: string): string {
-  const majorUnits = amount / 100;
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: currency
-  }).format(majorUnits);
+export function refreshBilling() {
+  $refreshTrigger.set($refreshTrigger.get() + 1);
 }
