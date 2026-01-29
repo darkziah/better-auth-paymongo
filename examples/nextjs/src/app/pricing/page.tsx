@@ -36,19 +36,15 @@ const plans = [
 
 export default function PricingPage() {
   async function subscribe(planId: string) {
-    const { data, error } = await authClient.paymongo.attach({
-      planId,
-      successUrl: `${window.location.origin}/billing?success=true`,
-      cancelUrl: `${window.location.origin}/pricing`,
-    });
+    const { data, error } = await authClient.paymongo.setPlan({ planId });
 
     if (error || !data) {
-      console.error("Failed to create checkout:", error);
+      console.error("Failed to set plan:", error);
       alert("Please sign in first to subscribe");
       return;
     }
 
-    window.location.href = data.checkoutUrl;
+    window.location.href = "/billing?success=true";
   }
 
   return (

@@ -169,6 +169,79 @@ export const paymongo = <
                     });
                 }
             ),
+            setplan: createAuthEndpoint(
+                '/paymongo/set-plan',
+                {
+                    method: 'POST',
+                    use: [sessionMiddleware],
+                    body: z.object({
+                        planId: z.string(),
+                        organizationId: z.string().optional(),
+                    }),
+                },
+                async (ctx) => {
+                    const user = ctx.context.session.user;
+                    const { planId, organizationId } = ctx.body;
+
+                    const plan = config.plans[planId];
+                    if (!plan) {
+                        throw new Error(`Plan ${planId} not found`);
+                    }
+
+                    const entityType = organizationId ? 'organization' : 'user';
+                    const entityId = organizationId || user.id;
+
+                    const existing = await ctx.context.adapter.findMany({
+                        model: 'paymongoUsage',
+                        where: [
+                            { field: 'entityType', value: entityType },
+                            { field: 'entityId', value: entityId }
+                        ]
+                    }) as Array<{ id: string }>;
+
+                    for (const record of existing) {
+                        await ctx.context.adapter.delete({
+                            model: 'paymongoUsage',
+                            where: [{ field: 'id', value: record.id }]
+                        });
+                    }
+
+                    const now = new Date();
+                    const periodEnd = new Date(now);
+                    periodEnd.setMonth(periodEnd.getMonth() + (plan.interval === 'yearly' ? 12 : 1));
+
+                    const planFeatures = plan.features;
+                    
+                    for (const [featureId, featureValue] of Object.entries(planFeatures)) {
+                        const featureConfig = config.features[featureId];
+                        
+                        if (featureConfig && featureConfig.type === 'metered') {
+                            const limit = typeof featureValue === 'number' ? featureValue : featureConfig.limit;
+                            
+                            await ctx.context.adapter.create({
+                                model: 'paymongoUsage',
+                                data: {
+                                    entityType,
+                                    entityId,
+                                    featureId,
+                                    balance: limit,
+                                    limit,
+                                    periodStart: now,
+                                    periodEnd,
+                                    planId,
+                                    checkoutSessionId: null,
+                                    createdAt: now,
+                                    updatedAt: now
+                                }
+                            });
+                        }
+                    }
+
+                    cache.clear();
+
+                    return ctx.json({ success: true, planId });
+                }
+            ),
             check: createAuthEndpoint(
                 '/paymongo/check',
                 {
