@@ -1,8 +1,0 @@
-node_modules/
-.vinxi/
-.output/
-dist/
-local.db
-local.db-shm
-local.db-wal
-.env
