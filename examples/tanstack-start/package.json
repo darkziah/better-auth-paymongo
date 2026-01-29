@@ -1,0 +1,33 @@
+{
+  "name": "better-auth-paymongo-example",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start",
+    "test": "bun test",
+    "db:migrate": "bun run ./scripts/migrate.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.93.0",
+    "@tanstack/start": "^1.93.0",
+    "better-auth": "^1.0.0",
+    "better-auth-paymongo": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vinxi": "^0.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.93.0",
+    "@types/bun": "^1.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vite-tsconfig-paths": "^5.0.0"
+  }
+}
