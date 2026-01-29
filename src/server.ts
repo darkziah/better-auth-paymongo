@@ -258,6 +258,116 @@ export const paymongo = <
                     return ctx.json({ success: true, planId });
                 }
             ),
+            verify: createAuthEndpoint(
+                '/paymongo/verify',
+                {
+                    method: 'POST',
+                    use: [sessionMiddleware],
+                    body: z.object({
+                        sessionId: z.string(),
+                    }),
+                },
+                async (ctx) => {
+                    const { sessionId } = ctx.body;
+
+                    const sessionResponse = await paymongoFetch(`/checkout_sessions/${sessionId}`, {
+                        method: 'GET'
+                    });
+
+                    if (!sessionResponse.ok) {
+                        const error = await sessionResponse.text();
+                        throw new Error(`PayMongo API error: ${error}`);
+                    }
+
+                    const sessionData = await sessionResponse.json();
+                    const paymentStatus = sessionData.data.attributes.payment_status;
+
+                    if (paymentStatus !== 'paid') {
+                        throw new Error(`Payment not completed. Status: ${paymentStatus}`);
+                    }
+
+                    const pendingSession = await ctx.context.adapter.findOne({
+                        model: 'paymongoSession',
+                        where: [{ field: 'sessionId', value: sessionId }]
+                    }) as { sessionId: string; entityType: string; entityId: string; planId: string; status: string } | null;
+
+                    if (!pendingSession) {
+                        throw new Error(`Session not found: ${sessionId}`);
+                    }
+
+                    if (pendingSession.status === 'completed') {
+                        return ctx.json({ success: true, planId: pendingSession.planId });
+                    }
+
+                    const plan = config.plans[pendingSession.planId];
+                    if (!plan) {
+                        throw new Error(`Plan ${pendingSession.planId} not found`);
+                    }
+
+                    const existingRecords = await ctx.context.adapter.findMany({
+                        model: 'paymongoUsage',
+                        where: [
+                            { field: 'entityType', value: pendingSession.entityType },
+                            { field: 'entityId', value: pendingSession.entityId }
+                        ]
+                    }) as Array<{ id: string; featureId: string; balance: number; limit: number }>;
+
+                    const usageByFeature = new Map<string, { consumed: number }>();
+                    for (const record of existingRecords) {
+                        const consumed = record.limit - record.balance;
+                        usageByFeature.set(record.featureId, { consumed });
+                        
+                        await ctx.context.adapter.delete({
+                            model: 'paymongoUsage',
+                            where: [{ field: 'id', value: record.id }]
+                        });
+                    }
+
+                    const now = new Date();
+                    const periodEnd = new Date(now);
+                    periodEnd.setMonth(periodEnd.getMonth() + (plan.interval === 'yearly' ? 12 : 1));
+
+                    const planFeatures = plan.features;
+                    
+                    for (const [featureId, featureValue] of Object.entries(planFeatures)) {
+                        const featureConfig = config.features[featureId];
+                        
+                        if (featureConfig && featureConfig.type === 'metered') {
+                            const newLimit = typeof featureValue === 'number' ? featureValue : featureConfig.limit;
+                            const previousUsage = usageByFeature.get(featureId);
+                            const consumed = previousUsage?.consumed ?? 0;
+                            const newBalance = Math.max(0, newLimit - consumed);
+                            
+                            await ctx.context.adapter.create({
+                                model: 'paymongoUsage',
+                                data: {
+                                    entityType: pendingSession.entityType,
+                                    entityId: pendingSession.entityId,
+                                    featureId,
+                                    balance: newBalance,
+                                    limit: newLimit,
+                                    periodStart: now,
+                                    periodEnd,
+                                    planId: pendingSession.planId,
+                                    checkoutSessionId: sessionId,
+                                    createdAt: now,
+                                    updatedAt: now
+                                }
+                            });
+                        }
+                    }
+
+                    await ctx.context.adapter.update({
+                        model: 'paymongoSession',
+                        where: [{ field: 'sessionId', value: sessionId }],
+                        update: { status: 'completed' }
+                    });
+
+                    cache.clear();
+
+                    return ctx.json({ success: true, planId: pendingSession.planId });
+                }
+            ),
             check: createAuthEndpoint(
                 '/paymongo/check',
                 {
