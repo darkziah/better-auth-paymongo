@@ -104,5 +104,35 @@ export declare const paymongo: <TPlans extends Record<string, any>, TFeatures ex
                 };
             }>)[];
         }, CheckResponse>;
+        track: import("better-call").StrictEndpoint<"/paymongo/track", {
+            method: "POST";
+            use: ((inputContext: import("better-call").MiddlewareInputContext<import("better-call").MiddlewareOptions>) => Promise<{
+                session: {
+                    session: Record<string, any> & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        userId: string;
+                        expiresAt: Date;
+                        token: string;
+                        ipAddress?: string | null | undefined;
+                        userAgent?: string | null | undefined;
+                    };
+                    user: Record<string, any> & {
+                        id: string;
+                        createdAt: Date;
+                        updatedAt: Date;
+                        email: string;
+                        emailVerified: boolean;
+                        name: string;
+                        image?: string | null | undefined;
+                    };
+                };
+            }>)[];
+        }, {
+            success: boolean;
+            balance: number;
+            limit: number;
+        }>;
     };
 };

@@ -1,73 +1,73 @@
 // src/react.ts
-function computeLimits(subscription, plans, addons) {
-  if (!subscription)
-    return {};
-  const plan = plans[subscription.planId];
-  if (!plan)
-    return {};
-  const limits = { ...plan.limits };
-  if (addons && subscription.addons) {
-    for (const [addonId, qty] of Object.entries(subscription.addons)) {
-      const addon = addons[addonId];
-      if (addon?.limitBonuses) {
-        for (const [key, bonus] of Object.entries(addon.limitBonuses)) {
-          limits[key] = (limits[key] || 0) + bonus * qty;
-        }
+import { atom } from "nanostores";
+import { useStore } from "@nanostores/react";
+import { useEffect, useState, useCallback } from "react";
+var $refreshTrigger = atom(0);
+function useCheck(featureId, options) {
+  const [state, setState] = useState({ data: null, loading: true, error: null });
+  const trigger = useStore($refreshTrigger);
+  const fetchCheck = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const params = new URLSearchParams({ feature: featureId });
+      if (options?.organizationId) {
+        params.set("organizationId", options.organizationId);
       }
+      const res = await fetch(`/api/auth/paymongo/check?${params}`);
+      if (!res.ok)
+        throw new Error("Check failed");
+      const data = await res.json();
+      setState({ data, loading: false, error: null });
+    } catch (e) {
+      setState({ data: null, loading: false, error: e });
     }
-  }
-  return limits;
-}
-function getCurrentPlan(config, subscription) {
-  if (!config || !subscription)
-    return null;
-  return config.plans[subscription.planId] ?? null;
-}
-function isSubscriptionActive(subscription) {
-  return subscription?.status === "active" || subscription?.status === "trialing";
-}
-function getTrialStatus(subscription) {
-  const isTrialing = subscription?.status === "trialing";
-  let trialEndsAt = null;
-  let daysRemaining = 0;
-  if (subscription?.trialEndsAt) {
-    trialEndsAt = new Date(subscription.trialEndsAt);
-    const now = new Date;
-    const msRemaining = trialEndsAt.getTime() - now.getTime();
-    daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
-  }
+  }, [featureId, options?.organizationId]);
+  useEffect(() => {
+    fetchCheck();
+  }, [fetchCheck, trigger]);
   return {
-    isTrialing,
-    trialEndsAt,
-    daysRemaining,
-    hasUsedTrial: !!subscription?.trialUsedAt
+    allowed: state.data?.allowed ?? false,
+    balance: state.data?.balance,
+    limit: state.data?.limit,
+    planId: state.data?.planId,
+    loading: state.loading,
+    error: state.error,
+    refetch: fetchCheck
   };
 }
-function getUsageInfo(limitKey, subscription, config, includeAddons = true) {
-  const usage = subscription?.usage?.[limitKey] ?? 0;
-  let limit = 0;
-  if (subscription?.planId && config?.plans[subscription.planId]) {
-    const computedLimits = includeAddons ? computeLimits(subscription, config.plans, config.addons) : config.plans[subscription.planId]?.limits ?? {};
-    limit = computedLimits[limitKey] ?? 0;
-  }
-  const remaining = Math.max(0, limit - usage);
-  const isOverLimit = usage >= limit && limit > 0;
-  return { usage, limit, remaining, isOverLimit };
+function useSubscription() {
+  const [state, setState] = useState({ planId: null, loading: true, error: null });
+  const trigger = useStore($refreshTrigger);
+  const refresh = useCallback(async () => {
+    setState((s) => ({ ...s, loading: true, error: null }));
+    try {
+      const res = await fetch("/api/auth/paymongo/check?feature=_subscription");
+      if (!res.ok)
+        throw new Error("Failed to get subscription");
+      const data = await res.json();
+      setState({ planId: data.planId ?? null, loading: false, error: null });
+    } catch (e) {
+      setState({ planId: null, loading: false, error: e });
+    }
+  }, []);
+  useEffect(() => {
+    refresh();
+  }, [refresh, trigger]);
+  return {
+    planId: state.planId,
+    loading: state.loading,
+    error: state.error,
+    refresh
+  };
 }
-function formatPrice(amount, currency) {
-  const majorUnits = amount / 100;
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency
-  }).format(majorUnits);
+function refreshBilling() {
+  $refreshTrigger.set($refreshTrigger.get() + 1);
 }
 export {
-  isSubscriptionActive,
-  getUsageInfo,
-  getTrialStatus,
-  getCurrentPlan,
-  formatPrice,
-  computeLimits
+  useSubscription,
+  useCheck,
+  refreshBilling,
+  $refreshTrigger
 };
 
-//# debugId=3B24400A1869146664756E2164756E21
+//# debugId=CB55344ACA6EE76564756E2164756E21
