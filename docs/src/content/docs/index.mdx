@@ -1,0 +1,41 @@
+---
+title: better-auth-paymongo
+description: PayMongo payment gateway plugin for Better-Auth with feature-based billing and usage metering
+template: splash
+hero:
+  title: better-auth-paymongo
+  tagline: PayMongo payment plugin for Better-Auth with the Autumn billing pattern
+  actions:
+    - text: Get Started
+      link: /getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/darkziah/better-auth-paymongo
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid>
+  <Card title="Feature-Based Billing" icon="puzzle">
+    Define boolean (access) and metered (usage) features per plan
+  </Card>
+  <Card title="No Webhooks Required" icon="rocket">
+    Uses the Autumn pattern - verify payments on-demand
+  </Card>
+  <Card title="Organization Support" icon="group">
+    Built-in seat-based billing for teams
+  </Card>
+  <Card title="React Hooks" icon="laptop">
+    Ready-to-use hooks for billing UI
+  </Card>
+</CardGrid>
+
+## Quick Install
+
+```bash
+npm install better-auth-paymongo
+```
