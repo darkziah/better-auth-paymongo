@@ -1,6 +1,6 @@
 {
   "name": "better-auth-paymongo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PayMongo payment gateway plugin for Better-Auth with subscription management, add-ons, and usage-based billing",
   "type": "module",
   "main": "./dist/index.js",
