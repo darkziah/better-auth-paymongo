@@ -1,8 +1,6 @@
 {
-  "active_plan": "/Users/dark/Documents/Projects/better-auth-paymongo/.sisyphus/plans/paymongo-subscription-flow.md",
-  "started_at": "2026-01-29T16:08:06.850Z",
-  "session_ids": [
-    "ses_3f7acb2abffeDaG21GxRR47z00"
-  ],
-  "plan_name": "paymongo-subscription-flow"
+  "active_plan": "/Users/dark/Documents/Projects/better-auth-paymongo/.sisyphus/plans/complete-test-coverage.md",
+  "started_at": "2026-01-30T05:53:18.956Z",
+  "session_ids": ["ses_3f2a1baa0ffeq899dfvqL2offv"],
+  "plan_name": "complete-test-coverage"
 }
