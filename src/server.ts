@@ -346,8 +346,6 @@ export const paymongo = <
                             const consumed = previousUsage?.consumed ?? 0;
                             const newBalance = Math.max(0, newLimit - consumed);
                             
-                            console.log("[VERIFY] Creating usage record:", { featureId, newLimit, consumed, newBalance, planId: pendingSession.planId });
-                            
                             await ctx.context.adapter.create({
                                 model: 'paymongoUsage',
                                 data: {
@@ -367,7 +365,6 @@ export const paymongo = <
                         }
                     }
 
-                    console.log("[VERIFY] Marking session completed, returning planId:", pendingSession.planId);
                     await ctx.context.adapter.update({
                         model: 'paymongoSession',
                         where: [{ field: 'referenceId', value: ref }],
