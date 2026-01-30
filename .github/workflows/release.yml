@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +30,20 @@ jobs:
 
       - name: Publish to npm
         run: npm publish --provenance --access public
+
+      - name: Publish to GitHub Packages
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > ~/.npmrc
+          # Create scoped package.json for GitHub Packages
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@darkziah/better-auth-paymongo';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));
+          "
+          npm publish --registry=https://npm.pkg.github.com
+          # Restore original package.json
+          git checkout package.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
