@@ -257,6 +257,45 @@ describe("PayMongo Autumn Plugin", () => {
             // @ts-ignore
             await expect(plugin.endpoints.attach(ctx)).rejects.toThrow("PayMongo API error");
         });
+
+        it("should throw validation error when planId is missing", async () => {
+            const ctx = createMockCtx(mockAdapter, {
+                body: {
+                    successUrl: "https://myapp.com/success",
+                    cancelUrl: "https://myapp.com/cancel",
+                },
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.attach(ctx)).rejects.toThrow();
+        });
+
+        it("should throw validation error when successUrl is missing", async () => {
+            const ctx = createMockCtx(mockAdapter, {
+                body: {
+                    planId: "pro",
+                    cancelUrl: "https://myapp.com/cancel",
+                },
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.attach(ctx)).rejects.toThrow();
+        });
+
+        it("should handle network timeout/error from PayMongo API", async () => {
+            mockFetch.mockRejectedValueOnce(new Error("Network request failed"));
+
+            const ctx = createMockCtx(mockAdapter, {
+                body: {
+                    planId: "pro",
+                    successUrl: "https://myapp.com/success",
+                    cancelUrl: "https://myapp.com/cancel",
+                },
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.attach(ctx)).rejects.toThrow("Network request failed");
+        });
     });
 
     // ============================================================
@@ -387,6 +426,31 @@ describe("PayMongo Autumn Plugin", () => {
             expect(projectsUsage?.limit).toBe(100);
             expect(projectsUsage?.balance).toBe(98);
         });
+
+        it("should throw validation error when ref is missing", async () => {
+            const ctx = createMockCtx(mockAdapter, {
+                body: {},
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.verify(ctx)).rejects.toThrow();
+        });
+
+        it("should handle network error from PayMongo API", async () => {
+            seedPaymongoSession({
+                referenceId: "ref_network_error",
+                status: "pending",
+            });
+
+            mockFetch.mockRejectedValueOnce(new Error("Failed to fetch"));
+
+            const ctx = createMockCtx(mockAdapter, {
+                body: { ref: "ref_network_error" },
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.verify(ctx)).rejects.toThrow("Failed to fetch");
+        });
     });
 
     // ============================================================
@@ -492,6 +556,90 @@ describe("PayMongo Autumn Plugin", () => {
             expect(result.allowed).toBe(true);
             expect(result.balance).toBe(50);
         });
+
+        it("should return allowed=true for boolean feature without balance/limit", async () => {
+            seedUsageRecord({
+                entityType: "user",
+                entityId: "user_123",
+                featureId: "api_access",
+                balance: 0, // Boolean features don't use balance
+                limit: 0,
+                planId: "pro",
+            });
+
+            const ctx = createMockCtx(mockAdapter, {
+                query: { feature: "api_access" },
+            });
+
+            // @ts-ignore
+            const result = await plugin.endpoints.check(ctx);
+
+            expect(result.allowed).toBe(true);
+            expect(result.balance).toBeUndefined(); // Boolean features don't return balance
+            expect(result.limit).toBeUndefined(); // Boolean features don't return limit
+            expect(result.planId).toBe("pro");
+        });
+
+        it("should return allowed=true for enabled boolean feature", async () => {
+            seedUsageRecord({
+                entityType: "user",
+                entityId: "user_123",
+                featureId: "api_access",
+                balance: 1, // Balance doesn't matter for boolean features
+                limit: 1,
+                planId: "enterprise",
+            });
+
+            const ctx = createMockCtx(mockAdapter, {
+                query: { feature: "api_access" },
+            });
+
+            // @ts-ignore
+            const result = await plugin.endpoints.check(ctx);
+
+            expect(result.allowed).toBe(true);
+            expect(result.planId).toBe("enterprise");
+        });
+
+        it("should throw validation error when feature is missing", async () => {
+            const ctx = createMockCtx(mockAdapter, {
+                query: {},
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.check(ctx)).rejects.toThrow();
+        });
+
+        it("should handle empty features plan", async () => {
+            const emptyPlanConfig: PaymongoAutumnConfig<
+                Record<string, PlanConfig>,
+                Record<string, FeatureConfig>
+            > = {
+                secretKey: "sk_test_123",
+                scopes: ["user"],
+                features: {},
+                plans: {
+                    basic: {
+                        amount: 0,
+                        currency: "PHP",
+                        displayName: "Basic",
+                        interval: "monthly",
+                        features: {},
+                    },
+                },
+            };
+
+            const emptyPlugin = paymongo(emptyPlanConfig);
+
+            const ctx = createMockCtx(mockAdapter, {
+                query: { feature: "nonexistent" },
+            });
+
+            // @ts-ignore
+            const result = await emptyPlugin.endpoints.check(ctx);
+
+            expect(result.allowed).toBe(false);
+        });
     });
 
     // ============================================================
@@ -585,6 +733,53 @@ describe("PayMongo Autumn Plugin", () => {
             const result = await plugin.endpoints.track(ctx);
 
             expect(result.balance).toBe(49);
+        });
+
+        it("should handle negative delta (refund scenario)", async () => {
+            seedUsageRecord({
+                entityType: "user",
+                entityId: "user_123",
+                featureId: "exports",
+                balance: 50,
+                limit: 100,
+            });
+
+            const ctx = createMockCtx(mockAdapter, {
+                body: { feature: "exports", delta: -5 },
+            });
+
+            // @ts-ignore
+            const result = await plugin.endpoints.track(ctx);
+
+            expect(result.balance).toBe(55);
+        });
+
+        it("should allow balance to exceed limit when refunding", async () => {
+            seedUsageRecord({
+                entityType: "user",
+                entityId: "user_123",
+                featureId: "exports",
+                balance: 98,
+                limit: 100,
+            });
+
+            const ctx = createMockCtx(mockAdapter, {
+                body: { feature: "exports", delta: -5 },
+            });
+
+            // @ts-ignore
+            const result = await plugin.endpoints.track(ctx);
+
+            expect(result.balance).toBe(103);
+        });
+
+        it("should throw validation error when feature is missing", async () => {
+            const ctx = createMockCtx(mockAdapter, {
+                body: { delta: 5 },
+            });
+
+            // @ts-ignore
+            await expect(plugin.endpoints.track(ctx)).rejects.toThrow();
         });
     });
 
