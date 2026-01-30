@@ -4,6 +4,7 @@ node_modules
 # output
 out
 *.tgz
+dist
 
 # code coverage
 coverage
@@ -37,4 +38,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # /stripe
 
 # OpenSpec
-# /openspec
+/openspec
+/.sisyphus
+.agent
+.cursor
+.gemini
+.vscode
